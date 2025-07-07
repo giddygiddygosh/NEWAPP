@@ -1,53 +1,64 @@
-// backend/models/Staff.js
+// File: backend/models/Job.js (Correct Mongoose Schema)
 
 const mongoose = require('mongoose');
 
-// Define sub-schema for individual unavailability periods
-const UnavailabilityPeriodSchema = new mongoose.Schema({
-    start: {
-        type: Date,
-        required: [true, 'Start date is required for unavailability period'],
+const UsedStockItemSchema = new mongoose.Schema({
+    stockItem: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'StockItem',
+        required: true,
     },
-    end: {
-        type: Date,
-        required: [true, 'End date is required for unavailability period'],
+    quantityUsed: {
+        type: Number,
+        required: true,
+        min: 0,
     },
-    type: { // e.g., 'Holiday', 'Sick', 'Other'
-        type: String,
-        enum: ['Holiday', 'Sick', 'Other', 'Training', 'Emergency Holiday'],
-        required: [true, 'Absence type is required'],
-    },
-    reason: { // Optional reason/notes for the absence
-        type: String,
-        trim: true,
-        default: '',
-    },
-}, { _id: true });
+}, { _id: false });
 
-
-const StaffSchema = new mongoose.Schema({
+const JobSchema = new mongoose.Schema({
     company: {
-        type: mongoose.Schema.ObjectId,
+        type: mongoose.Schema.Types.ObjectId,
         ref: 'Company',
         required: true,
     },
-    contactPersonName: {
+    customer: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Customer',
+        required: [true, 'A customer is required for the job.'],
+    },
+    serviceType: {
         type: String,
-        required: [true, 'Staff name is required'],
+        required: [true, 'Service type is required.'],
         trim: true,
     },
-    email: {
+    description: {
         type: String,
-        required: [true, 'Staff email is required'],
-        unique: true,
         trim: true,
-        lowercase: true,
-        match: [/.+@.+\..+/, 'Please fill a valid email address']
     },
-    phone: {
+    date: {
+        type: Date,
+        required: [true, 'Job date is required.'],
+    },
+    endDate: {
+        type: Date,
+    },
+    time: {
         type: String,
-        trim: true,
-        default: ''
+        required: [true, 'Job time is required.'],
+    },
+    duration: {
+        type: Number,
+        required: [true, 'Job duration is required.'],
+        default: 60,
+    },
+    assignedStaff: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Staff',
+    }],
+    status: {
+        type: String,
+        enum: ['Booked', 'Confirmed', 'In Progress', 'Completed', 'Invoiced', 'Invoice Paid', 'Cancelled', 'Pending', 'On Hold'],
+        default: 'Booked',
     },
     address: {
         street: { type: String, trim: true, default: '' },
@@ -56,40 +67,27 @@ const StaffSchema = new mongoose.Schema({
         postcode: { type: String, trim: true, default: '' },
         country: { type: String, trim: true, default: '' },
     },
-    role: {
-        type: String,
-        enum: ['staff', 'manager'],
-        default: 'staff',
+    recurring: {
+        pattern: {
+            type: String,
+            enum: ['none', 'daily', 'weekly', 'monthly', 'yearly'],
+            default: 'none',
+        },
+        endDate: {
+            type: Date,
+        },
     },
-    employeeId: {
+    usedStockItems: [UsedStockItemSchema],
+    notes: {
         type: String,
         trim: true,
-        unique: true,
-        sparse: true,
     },
-    hireDate: {
-        type: Date,
-        default: Date.now,
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
     },
-    unavailabilityPeriods: {
-        type: [UnavailabilityPeriodSchema],
-        default: [],
-    },
-    createdAt: {
-        type: Date,
-        default: Date.now,
-    },
-    updatedAt: {
-        type: Date,
-        default: Date.now,
-    },
+}, {
+    timestamps: true,
 });
 
-StaffSchema.pre('save', function(next) {
-    this.updatedAt = Date.now();
-    next();
-});
-
-// THIS IS THE FIX FOR OverwriteModelError
-// Check if the 'Staff' model already exists before compiling it.
-module.exports = mongoose.models.Staff || mongoose.model('Staff', StaffSchema);
+module.exports = mongoose.model('Job', JobSchema);

@@ -1,6 +1,4 @@
-// src/components/common/AddContactModal.jsx
-
-import React, { useState, useEffect, useCallback } from 'react'; // CORRECTED: Removed '=>'
+import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../utils/api';
 import Loader from '../common/Loader';
 import Modal from '../common/Modal';
@@ -8,14 +6,13 @@ import ModernInput from '../common/ModernInput';
 import ModernSelect from '../common/ModernSelect';
 import AddressInput from '../common/AddressInput';
 
-// Added a comment to ensure these props are passed and handled
 // roleOptions is expected from StaffPage.jsx
-const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsLoaded, isMapsLoadError, type = 'lead', roleOptions = [] }) => { // roleOptions prop for staff roles
+const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsLoaded, isMapsLoadError, type = 'lead', roleOptions = [] }) => {
     const modalTitle = type === 'lead'
         ? (initialData ? 'Edit Lead' : 'Add New Lead')
         : type === 'customer'
             ? (initialData ? 'Edit Customer' : 'Add New Customer')
-            : (initialData ? 'Edit Staff Member' : 'Add New Staff Member'); // Dynamic title based on type
+            : (initialData ? 'Edit Staff Member' : 'Add New Staff Member');
 
     const [formData, setFormData] = useState({
         companyName: initialData?.companyName || '',
@@ -32,8 +29,8 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
         convertedFromLead: initialData?.convertedFromLead || null,
         customerType: initialData?.customerType || '',
         industry: initialData?.industry || '',
-        // NEW: Staff-specific fields
-        role: initialData?.role || 'staff', // This 'role' is the Staff model's role
+        // Staff-specific fields
+        role: initialData?.role || 'staff',
         employeeId: initialData?.employeeId || '',
         salesPersonName: initialData?.salesPersonName || '', // Common with lead/customer
     });
@@ -100,8 +97,7 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                 convertedFromLead: initialData?.convertedFromLead || null,
                 customerType: initialData?.customerType || '',
                 industry: initialData?.industry || '',
-                // NEW: Initialize staff-specific fields
-                role: initialData?.role || 'staff', // Directly use initialData.role for Staff type
+                role: initialData?.role || 'staff',
                 employeeId: initialData?.employeeId || '',
                 salesPersonName: initialData?.salesPersonName || '',
             });
@@ -160,7 +156,7 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
             }
             if (newPhones[index].number.length > 0 && !newPhones.some(p => p.isMaster)) {
                  newPhones[index].isMaster = true;
-             }
+              }
             return { ...prev, phones: newPhones };
         });
     }, []);
@@ -245,7 +241,6 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
         setError(null);
         setSuccessMessage(null);
 
-        // Basic validation for contact person and at least one email
         const isEmailArrayEmpty = formData.emails.filter(e => e.email.trim() !== '').length === 0;
 
         if (!formData.contactPersonName || isEmailArrayEmpty) {
@@ -253,7 +248,6 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
             setSaving(false);
             return;
         }
-        // Specific validation for staff role if adding staff
         if (type === 'staff' && !formData.role) {
             setError('Staff role is required.');
             setSaving(false);
@@ -263,9 +257,6 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
         try {
             const dataToSave = { ...formData };
 
-            // Handle email and phone arrays (common for all types)
-            // For Lead/Customer, keep as array of objects.
-            // For Staff, convert to single string as Staff model expects it.
             if (type === 'staff') {
                 dataToSave.email = formData.emails.find(e => e.isMaster)?.email || formData.emails[0]?.email || '';
                 dataToSave.phone = formData.phones.find(p => p.isMaster)?.number || formData.phones[0]?.number || '';
@@ -277,12 +268,11 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
 
             let response;
             if (type === 'lead') {
-                // Lead-specific cleanup
-                delete dataToSave.serviceAddresses; // Leads don't have service addresses
+                delete dataToSave.serviceAddresses;
                 delete dataToSave.customerType;
                 delete dataToSave.industry;
-                delete dataToSave.role; // Staff role not for leads
-                delete dataToSave.employeeId; // Staff employee ID not for leads
+                delete dataToSave.role;
+                delete dataToSave.employeeId;
 
                 if (initialData) {
                     response = await api.put(`/leads/${initialData._id}`, dataToSave);
@@ -292,17 +282,15 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                     setSuccessMessage('Lead added successfully!');
                 }
             } else if (type === 'customer') {
-                // Customer-specific cleanup (remove lead/staff only fields)
                 delete dataToSave.leadSource;
                 delete dataToSave.leadStatus;
-                delete dataToSave.convertedFromLead; // Not directly settable from form on update
-                delete dataToSave.role; // Staff role not for customers
-                delete dataToSave.employeeId; // Staff employee ID not for customers
+                delete dataToSave.convertedFromLead;
+                delete dataToSave.role;
+                delete dataToSave.employeeId;
                 
-                // Process service addresses for customers
                 dataToSave.serviceAddresses = formData.serviceAddresses.map(addr => ({
                     ...addr,
-                    amount: parseFloat(addr.amount) || 0 // Ensure amount is number
+                    amount: parseFloat(addr.amount) || 0
                 })).filter(addr => Object.values(addr).some(val => val && val.toString().trim() !== ''));
 
                 if (initialData?._id && !initialData?.convertedFromLead) {
@@ -312,9 +300,8 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                     response = await api.post('/customers', dataToSave);
                     setSuccessMessage('Customer added successfully!');
                 }
-            } else if (type === 'staff') { // Handle staff submission
-                // Staff-specific cleanup
-                delete dataToSave.companyName; // Staff model doesn't have companyName
+            } else if (type === 'staff') {
+                delete dataToSave.companyName;
                 delete dataToSave.leadSource;
                 delete dataToSave.leadStatus;
                 delete dataToSave.commissionEarned;
@@ -322,19 +309,16 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                 delete dataToSave.convertedFromLead;
                 delete dataToSave.customerType;
                 delete dataToSave.industry;
-                delete dataToSave.salesPersonName; // Staff model doesn't have salesPersonName directly
+                delete dataToSave.salesPersonName;
 
-
-                // Role and employeeId are already handled by direct mapping in dataToSave
-                if (initialData) { // Editing existing staff
+                if (initialData) {
                     response = await api.put(`/staff/${initialData._id}`, dataToSave);
                     setSuccessMessage('Staff member updated successfully!');
-                } else { // Adding new staff
+                } else {
                     response = await api.post('/staff', dataToSave);
                     setSuccessMessage('Staff member added successfully!');
                 }
             }
-
 
             onContactAdded(response.data.contact || response.data.lead || response.data.customer || response.data.staff);
             setTimeout(() => {
@@ -356,7 +340,6 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                     {successMessage && <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg mb-4">{successMessage}</div>}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Company Name field (only for Lead/Customer) */}
                         {type !== 'staff' && (
                             <ModernInput
                                 label="Company Name (Optional)"
@@ -639,15 +622,14 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                         </>
                     )}
 
-                    {type === 'staff' && ( // NEW: Staff-specific fields
+                    {type === 'staff' && (
                         <>
-                            {/* Staff does not have company name as a field in their profile */}
                             <ModernSelect
                                 label="Staff Role"
                                 name="role"
                                 value={formData.role}
                                 onChange={handleChange}
-                                options={roleOptions} // Use roleOptions passed from StaffPage
+                                options={roleOptions}
                                 required
                             />
                             <ModernInput

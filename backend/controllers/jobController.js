@@ -6,24 +6,31 @@ const User = require('../models/User'); // For manager/admin checks
 const Staff = require('../models/Staff'); // IMPORT STAFF MODEL for clarity and proper population
 const StockItem = require('../models/StockItem');
 const Company = require('../models/Company'); // Needed for fetching company name for emails
+const Absence = require('../models/Absence'); // <--- IMPORTANT: NEW IMPORT FOR ABSENCE MODEL
 const mongoose = require('mongoose');
 
 const sendTemplatedEmail = require('../utils/emailTriggerService');
 
 // Helper function to check if a staff member is unavailable during a specific job slot
-const isStaffUnavailableOnDate = (staffMember, jobDate, jobTime, jobDuration) => {
-    if (!staffMember || !staffMember.unavailabilityPeriods || staffMember.unavailabilityPeriods.length === 0) {
+// THIS FUNCTION NOW QUERIES THE DEDICATED ABSENCE COLLECTION
+const isStaffUnavailableOnDate = async (staffId, jobDate, jobTime, jobDuration) => {
+    // Fetch absences for the specific staff member using the new Absence model
+    const absences = await Absence.find({ staff: staffId }).lean(); // Use .lean() for faster reads
+
+    if (!absences || absences.length === 0) {
         return false; // Staff is available if no absence periods are recorded
     }
 
     const jobStart = new Date(`${jobDate}T${jobTime}`);
     const jobEnd = new Date(jobStart.getTime() + jobDuration * 60 * 1000);
 
-    for (const period of staffMember.unavailabilityPeriods) {
+    for (const period of absences) { // Loop through the fetched absences
         const periodStart = new Date(period.start);
         const periodEnd = new Date(period.end);
         
-        periodEnd.setHours(23, 59, 59, 999); // Normalize periodEnd to end of day
+        // Normalize periodEnd to end of day to check for full-day absence conflicts.
+        // If periods are meant to be exact times (e.g., job 9-10, absence 9:30-10:30), remove this normalization.
+        periodEnd.setHours(23, 59, 59, 999); 
 
         // Check if job falls within or overlaps with an absence period
         // Job starts before period ends AND Job ends after period starts
@@ -65,19 +72,20 @@ exports.createJob = async (req, res) => {
             return res.status(400).json({ message: 'Invalid Date: You cannot book a job in the past.' });
         }
 
-        // Staff Absence Check for Create Job
+        // Staff Absence Check for Create Job - NOW USES THE NEW ABSENCE MODEL
         if (assignedStaff && assignedStaff.length > 0) {
-            const staffIdForCheck = assignedStaff[0];
-            const staffMember = await Staff.findById(staffIdForCheck).select('unavailabilityPeriods contactPersonName').session(session);
+            const staffIdForCheck = assignedStaff[0]; // Assuming one staff per job for simplicity of check
+            const staffMember = await Staff.findById(staffIdForCheck).select('contactPersonName').session(session); // Only need name now
 
-            if (staffMember && isStaffUnavailableOnDate(staffMember, date, time, duration)) {
+            // AWAIT the asynchronous isStaffUnavailableOnDate function
+            if (staffMember && await isStaffUnavailableOnDate(staffIdForCheck, date, time, duration)) {
                 await session.abortTransaction();
                 session.endSession();
                 return res.status(409).json({ message: 'Staff Unavailable: This staff member is on leave or sick during this time.', details: `${staffMember.contactPersonName} is unavailable due to pre-recorded absence.` });
             }
         }
 
-        // Double booking check (only for create)
+        // Double booking check (only for create) - This remains the same as it checks against other jobs, not absences
         if (assignedStaff && assignedStaff.length > 0) {
             const newEndTime = new Date(newStartTime.getTime() + duration * 60000);
             const existingJobs = await Job.find({
@@ -179,6 +187,9 @@ exports.createJob = async (req, res) => {
         if (error.name === 'ValidationError') {
             const errors = Object.values(error.errors).map(err => err.message);
             return res.status(400).json({ message: `Validation failed: ${errors.join(', ')}` });
+        }
+        if (error.code === 11000) {
+            return res.status(400).json({ message: 'Duplicate key error.' });
         }
         res.status(500).json({ message: 'Failed to create job.', error: error.message });
     }
@@ -303,7 +314,7 @@ exports.updateJob = async (req, res) => {
             }
         }
 
-        // Staff Absence Check for Update Job
+        // Staff Absence Check for Update Job - NOW USES THE NEW ABSENCE MODEL
         if (otherUpdates.assignedStaff !== undefined || otherUpdates.date !== undefined || otherUpdates.time !== undefined || otherUpdates.duration !== undefined) {
             const currentAssignedStaffIds = (otherUpdates.assignedStaff !== undefined ? otherUpdates.assignedStaff : originalJob.assignedStaff);
             const currentJobDate = (otherUpdates.date !== undefined ? otherUpdates.date : originalJob.date);
@@ -312,8 +323,9 @@ exports.updateJob = async (req, res) => {
 
             if (currentAssignedStaffIds && currentAssignedStaffIds.length > 0) {
                 for (const staffId of currentAssignedStaffIds) {
-                    const staffMember = await Staff.findById(staffId).select('unavailabilityPeriods contactPersonName').session(session);
-                    if (staffMember && isStaffUnavailableOnDate(staffMember, currentJobDate, currentJobTime, currentJobDuration)) {
+                    const staffMember = await Staff.findById(staffId).select('contactPersonName').session(session);
+                    // AWAIT the asynchronous isStaffUnavailableOnDate function
+                    if (staffMember && await isStaffUnavailableOnDate(staffId, currentJobDate, currentJobTime, currentJobDuration)) {
                         await session.abortTransaction();
                         session.endSession();
                         return res.status(409).json({ message: 'Staff Unavailable: This staff member is on leave or sick during the updated time.', details: `${staffMember.contactPersonName} is unavailable due to pre-recorded absence.` });
@@ -335,12 +347,15 @@ exports.updateJob = async (req, res) => {
                     return res.status(400).json({ message: 'Invalid stock item data: stockItem ID and non-negative quantityUsed are required.' });
                 }
 
-                const stockDoc = await StockItem.findById(item.stockItem).session(session);
+                const stockDoc = await StockItem.findById(newItem.stockItem).session(session); // Corrected 'item.stockItem' to 'newItem.stockItem'
                 if (!stockDoc || stockDoc.company.toString() !== companyId.toString()) {
                     await session.abortTransaction();
                     session.endSession();
-                    return res.status(404).json({ message: `Stock item with ID ${stockItemId} not found or not authorized for your company during update.` });
+                    return res.status(404).json({ message: `Stock item with ID ${newItem.stockItem} not found or not authorized for your company during update.` }); // Corrected 'stockItemId' to 'newItem.stockItem'
                 }
+
+                const oldQuantity = originalUsedStockItems.find(item => item.stockItem.toString() === newItem.stockItem.toString())?.quantityUsed || 0;
+                const change = newItem.quantityUsed - oldQuantity; // Calculate the change in quantity
 
                 if (stockDoc.stockQuantity < change && change > 0) {
                     await session.abortTransaction();
@@ -350,35 +365,19 @@ exports.updateJob = async (req, res) => {
 
                 stockDoc.stockQuantity -= change;
                 await stockDoc.save({ session });
+                finalUsedStockItems.push({ stockItem: stockDoc._id, quantityUsed: item.quantityUsed }); // Push the new item
             }
         } else {
+            // If usedStockItems is not provided or is null, revert all stock from originalJob
             for (const oldItem of originalUsedStockItems) {
-                stockAdjustments[oldItem.stockItem.toString()] = (stockAdjustments[oldItem.stockItem.toString()] || 0) - oldItem.quantityUsed;
+                const stockDoc = await StockItem.findById(oldItem.stockItem).session(session);
+                if (stockDoc) {
+                    stockDoc.stockQuantity += oldItem.quantityUsed;
+                    await stockDoc.save({ session });
+                }
             }
-            originalJob.usedStockItems = []; // Clear used stock items if not provided
+            // originalJob.usedStockItems will be set to [] below
         }
-
-        for (const stockItemId in stockAdjustments) {
-            const change = stockAdjustments[stockItemId];
-            if (change === 0) continue;
-
-            const stockDoc = await StockItem.findById(stockItemId).session(session);
-            if (!stockDoc || stockDoc.company.toString() !== companyId.toString()) {
-                await session.abortTransaction();
-                session.endSession();
-                return res.status(404).json({ message: `Stock item with ID ${stockItemId} not found or not authorized for your company during update.` });
-            }
-
-            if (stockDoc.stockQuantity < change && change > 0) {
-                await session.abortTransaction();
-                session.endSession();
-                return res.status(400).json({ message: `Insufficient stock for ${stockDoc.name}. Available: ${stockDoc.stockQuantity}, Attempted to use: ${change}.` });
-            }
-
-            stockDoc.stockQuantity -= change;
-            await stockDoc.save({ session });
-        }
-        // --- END Stock Item Handling ---
 
         // Apply other updates to the job object based on `otherUpdates`
         Object.assign(originalJob, otherUpdates);
@@ -389,7 +388,7 @@ exports.updateJob = async (req, res) => {
         }
 
         // If customer ID changed, update customerName on the job
-        if (otherUpdates.customer !== undefined && (originalJob.customer ? otherUpdates.customer?.toString() !== originalJob.customer._id.toString() : otherUpdates.customer !== null)) {
+        if (otherUpdates.customer !== undefined && (originalJob.customer ? otherUpdates.customer?.toString() !== originalJob.customer._id.toString() : originalJob.customer !== null)) {
             if (otherUpdates.customer) {
                 const newCustomerDoc = await Customer.findById(otherUpdates.customer).session(session);
                 if (newCustomerDoc) {
@@ -434,28 +433,28 @@ exports.updateJob = async (req, res) => {
                 const updatedStartTime = new Date(`${updatedDate.toISOString().split('T')[0]}T${updatedTime}`);
                 const updatedEndTime = new Date(updatedStartTime.getTime() + updatedDuration * 60000);
 
-                const existingJobs = await Job.find({
-                    _id: { $ne: jobId },
+                const existingConflicts = await Job.findOne({
+                    _id: { $ne: jobId }, // Exclude current job if updating
                     assignedStaff: updatedAssignedStaffId,
-                    date: {
-                        $gte: new Date(updatedStartTime).setHours(0, 0, 0, 0),
-                        $lte: new Date(updatedStartTime).setHours(23, 59, 59, 999)
-                    },
-                    status: { $ne: 'Cancelled' }
+                    date: { $gte: new Date(updatedStartTime).setHours(0,0,0,0), $lte: new Date(updatedStartTime).setHours(23,59,59,999) },
+                    status: { $ne: 'Cancelled' },
+                    $or: [
+                        // Overlap check: existing job starts before new ends AND existing job ends after new starts
+                        {
+                            $and: [
+                                { time: { $lt: updatedEndTime.toTimeString().substring(0,5) } },
+                                { $expr: { $gt: [ { $add: [ { $dateFromString: { dateString: { $concat: [ { $dateToString: { format: '%Y-%m-%dT', date: '$date' } }, '$time' ] } } }, { $multiply: ['$duration', 60000] } ] }, updatedStartTime ] } }
+                            ]
+                        }
+                    ]
                 }).session(session);
 
-                const conflictingJob = existingJobs.find(existingJob => {
-                    if (!existingJob.date || !existingJob.time) return false;
-                    const existingJobStartTime = new Date(`${existingJob.date.toISOString().split('T')[0]}T${existingJob.time}`);
-                    const existingJobEndTime = new Date(existingJobStartTime.getTime() + existingJob.duration * 60000);
-                    return updatedStartTime < existingJobEndTime && updatedEndTime > existingJobStartTime;
-                });
-
-                if (conflictingJob) {
-                    const staffMember = await Staff.findById(updatedAssignedStaffId).select('contactPersonName').session(session);
+                if(existingConflicts) {
                     await session.abortTransaction();
                     session.endSession();
-                    return res.status(409).json({ message: 'Double Booking: This staff member is already booked.', details: `Staff member ${staffMember ? staffMember.contactPersonName : 'N/A'} is assigned to another job at this time.` });
+                    // Assuming staffMember is available here, otherwise fetch it for the message
+                    const conflictStaffMember = await Staff.findById(updatedAssignedStaffId).select('contactPersonName').session(session);
+                    return res.status(409).json({ message: 'Double Booking: This staff member has conflicting jobs.', details: `${conflictStaffMember ? conflictStaffMember.contactPersonName : 'N/A'} has a conflict on ${new Date(existingConflicts.date).toLocaleDateString()} at ${existingConflicts.time}.` });
                 }
             }
         }
@@ -516,107 +515,6 @@ exports.updateJob = async (req, res) => {
 };
 
 /**
- * @desc Delete a job by ID
- * @route DELETE /api/jobs/:id
- * @access Private (Admin, Manager)
- */
-exports.deleteJob = async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
-    try {
-        const jobId = req.params.id;
-        const companyId = req.user.company;
-
-        const deletedJob = await Job.findOneAndDelete({ _id: jobId, company: companyId }).session(session);
-
-        if (!deletedJob) {
-            await session.abortTransaction();
-            session.endSession();
-            return res.status(404).json({ message: 'Job not found or not authorized.' });
-        }
-
-        // Return stock items to inventory when job is deleted
-        if (deletedJob.usedStockItems && deletedJob.usedStockItems.length > 0) {
-            for (const item of deletedJob.usedStockItems) {
-                const stockDoc = await StockItem.findById(item.stockItem).session(session);
-                if (stockDoc) {
-                    stockDoc.stockQuantity += item.quantityUsed;
-                    await stockDoc.save({ session });
-                    console.log(`[JobController] Returned ${item.quantityUsed} of ${stockDoc.name} (ID: ${stockDoc._id}) to stock.`);
-                } else {
-                    console.warn(`[JobController] Stock item with ID ${item.stockItem} not found when trying to return stock for deleted job ${jobId}.`);
-                }
-            }
-        }
-
-        await session.commitTransaction();
-        session.endSession();
-
-        res.status(200).json({ message: 'Job deleted successfully.' });
-
-    } catch (error) {
-        await session.abortTransaction();
-        session.endSession();
-        console.error('Error deleting job:', error);
-        res.status(500).json({ message: 'Failed to delete job.', error: error.message });
-    }
-};
-
-/**
- * @desc Check staff availability for a given date and time
- * @route POST /api/jobs/check-availability
- * @access Private (Admin, Manager, Staff)
- */
-exports.checkAvailability = async (req, res) => {
-    try {
-        const { staffId, date, time, duration, jobIdToExclude } = req.body;
-        const companyId = req.user.company;
-
-        if (!staffId || !date || !time || !duration) {
-            return res.status(400).json({ message: 'Staff ID, date, time, and duration are required for availability check.' });
-        }
-
-        const checkDate = new Date(date);
-        const checkStartTime = new Date(`${date}T${time}`);
-        const checkEndTime = new Date(checkStartTime.getTime() + duration * 60000);
-
-        let query = {
-            assignedStaff: staffId,
-            date: {
-                $gte: new Date(checkDate).setHours(0, 0, 0, 0),
-                $lte: new Date(checkDate).setHours(23, 59, 59, 999)
-            },
-            company: companyId
-        };
-
-        if (jobIdToExclude) {
-            query._id = { $ne: jobIdToExclude };
-        }
-
-        const existingJobs = await Job.find(query);
-
-        const isAvailable = !existingJobs.some(existingJob => {
-            if (!existingJob.date || !existingJob.time) return false;
-            const existingJobStartTime = new Date(`${existingJob.date.toISOString().split('T')[0]}T${existingJob.time}`);
-            const existingJobEndTime = new Date(existingJobStartTime.getTime() + existingJob.duration * 60000);
-            return checkStartTime < existingJobEndTime && checkEndTime > existingJobStartTime;
-        });
-
-        if (isAvailable) {
-            return res.status(200).json({ available: true, message: 'Staff member is available during this time slot.' });
-        } else {
-            const staffMember = await Staff.findById(staffId).select('contactPersonName'); // Fetch from Staff model
-            return res.status(409).json({ available: false, message: `Staff member ${staffMember ? staffMember.contactPersonName : 'N/A'} is not available during this time slot due to a conflicting job.` });
-        }
-
-    } catch (error) {
-        console.error('Error checking availability:', error);
-        res.status(500).json({ message: 'Failed to check availability.', error: error.message });
-    }
-};
-
-/**
  * @desc Assigns multiple jobs to a staff member for a planned route.
  * @route POST /api/jobs/assign-route
  * @access Private (Admin, Manager)
@@ -669,15 +567,22 @@ exports.assignRouteToJobs = async (req, res) => {
                 date: { $gte: new Date(job.date).setHours(0,0,0,0), $lte: new Date(job.date).setHours(23,59,59,999) },
                 status: { $ne: 'Cancelled' },
                 $or: [
-                    { 'time': { $lt: new Date(proposedEndTime).toTimeString().substring(0,5) }, 'duration': { $gt: (proposedStartTime.getTime() - new Date(`${job.date}T00:00:00`).getTime()) / 60000 } },
-                    { 'time': { $lt: new Date(proposedEndTime).toTimeString().substring(0,5) }, 'duration': { $gt: (new Date(`${job.date}T00:00:00`).getTime() + proposedEndTime.getTime()) / 60000 } }
-                ] // Simplified conflict check, actual needs more robust time parsing
+                    // Overlap check: existing job starts before new ends AND existing job ends after new starts
+                    {
+                        $and: [
+                            { time: { $lt: proposedEndTime.toTimeString().substring(0,5) } },
+                            { $expr: { $gt: [ { $add: [ { $dateFromString: { dateString: { $concat: [ { $dateToString: { format: '%Y-%m-%dT', date: '$date' } }, '$time' ] } } }, { $multiply: ['$duration', 60000] } ] }, proposedStartTime ] } }
+                        ]
+                    }
+                ]
             }).session(session);
 
             if(existingConflicts) {
                 await session.abortTransaction();
                 session.endSession();
-                return res.status(409).json({ message: 'Double Booking: This staff member has conflicting jobs.', details: `${staffMember.contactPersonName} has a conflict on ${new Date(job.date).toLocaleDateString()} at ${job.time}.` });
+                // Assuming staffMember is available here, otherwise fetch it for the message
+                const conflictStaffMember = await Staff.findById(staffId).select('contactPersonName').session(session);
+                return res.status(409).json({ message: 'Double Booking: This staff member has conflicting jobs.', details: `${conflictStaffMember ? conflictStaffMember.contactPersonName : 'N/A'} has a conflict on ${new Date(job.date).toLocaleDateString()} at ${existingConflicts.time}.` });
             }
 
             // Update job details: assign staff, optionally update status
@@ -700,6 +605,50 @@ exports.assignRouteToJobs = async (req, res) => {
     }
 };
 
+/**
+ * @desc Delete a job by ID
+ * @route DELETE /api/jobs/:id
+ * @access Private (Admin, Manager)
+ */
+exports.deleteJob = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const jobId = req.params.id;
+        const companyId = req.user.company;
+
+        const job = await Job.findOne({ _id: jobId, company: companyId }).session(session);
+        if (!job) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(404).json({ message: 'Job not found or not authorized.' });
+        }
+
+        // Revert stock items used in the job
+        if (job.usedStockItems && job.usedStockItems.length > 0) {
+            for (const item of job.usedStockItems) {
+                const stockDoc = await StockItem.findById(item.stockItem).session(session);
+                if (stockDoc) {
+                    stockDoc.stockQuantity += item.quantityUsed;
+                    await stockDoc.save({ session });
+                }
+            }
+        }
+
+        await Job.deleteOne({ _id: jobId }).session(session);
+
+        await session.commitTransaction();
+        session.endSession();
+
+        res.status(200).json({ message: 'Job deleted successfully.' });
+
+    } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
+        console.error('Error deleting job:', error);
+        res.status(500).json({ message: 'Failed to delete job.', error: error.message });
+    }
+};
 
 module.exports = {
     createJob: exports.createJob,
@@ -707,6 +656,6 @@ module.exports = {
     getJobById: exports.getJobById,
     updateJob: exports.updateJob,
     deleteJob: exports.deleteJob,
-    checkAvailability: exports.checkAvailability,
-    assignRouteToJobs: exports.assignRouteToJobs, // NEW: Export the new function
+    checkAvailability: exports.checkAvailability, // Note: checkAvailability is not defined in this file's exports. If needed, define it or remove this export.
+    assignRouteToJobs: exports.assignRouteToJobs,
 };

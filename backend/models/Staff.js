@@ -1,53 +1,50 @@
-// backend/models/Staff.js
+// File: backend/models/Staff.js
 
 const mongoose = require('mongoose');
 
-// Define sub-schema for individual unavailability periods
+// This defines the structure for each individual absence period
 const UnavailabilityPeriodSchema = new mongoose.Schema({
     start: {
         type: Date,
-        required: [true, 'Start date is required for unavailability period'],
+        required: true,
     },
     end: {
         type: Date,
-        required: [true, 'End date is required for unavailability period'],
+        required: true,
     },
-    type: { // e.g., 'Holiday', 'Sick', 'Other'
+    type: {
         type: String,
-        enum: ['Holiday', 'Sick', 'Other', 'Training', 'Emergency Holiday'], // Ensure enum matches frontend
-        required: [true, 'Absence type is required'],
+        required: true,
+        enum: ['Holiday', 'Sick', 'Training', 'Appointment', 'Other'],
+        default: 'Other',
     },
-    reason: { // Optional reason/notes for the absence
+    reason: {
         type: String,
         trim: true,
-        default: '',
     },
-}, { _id: true }); // Explicitly set _id to true, though it's default behavior
-
+});
 
 const StaffSchema = new mongoose.Schema({
     company: {
-        type: mongoose.Schema.ObjectId,
+        type: mongoose.Schema.Types.ObjectId,
         ref: 'Company',
         required: true,
     },
     contactPersonName: {
         type: String,
-        required: [true, 'Staff name is required'],
+        required: [true, 'Contact person name is required'],
         trim: true,
     },
     email: {
         type: String,
-        required: [true, 'Staff email is required'],
+        required: [true, 'Email is required'],
         unique: true,
         trim: true,
         lowercase: true,
-        match: [/.+@.+\..+/, 'Please fill a valid email address']
     },
     phone: {
         type: String,
         trim: true,
-        default: ''
     },
     address: {
         street: { type: String, trim: true, default: '' },
@@ -58,39 +55,23 @@ const StaffSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['staff', 'manager'],
+        enum: ['admin', 'manager', 'staff'],
         default: 'staff',
     },
     employeeId: {
         type: String,
         trim: true,
         unique: true,
-        sparse: true,
+        sparse: true, // Allows multiple null values but unique if value exists
     },
-    hireDate: {
-        type: Date,
-        default: Date.now,
-    },
-    // THIS IS THE CRITICAL FIELD
+    // This is the critical part: an array of absence periods embedded in the staff document
     unavailabilityPeriods: {
-        type: [UnavailabilityPeriodSchema], // Array of subdocuments
-        default: [], // Default to an empty array
+        type: [UnavailabilityPeriodSchema],
+        default: [],
+        select: false, // Hide from default queries unless explicitly requested
     },
-    createdAt: {
-        type: Date,
-        default: Date.now,
-    },
-    updatedAt: {
-        type: Date,
-        default: Date.now,
-    },
+}, {
+    timestamps: true,
 });
 
-StaffSchema.pre('save', function(next) {
-    this.updatedAt = Date.now();
-    next();
-});
-
-// THIS IS THE FIX FOR OverwriteModelError
-// Check if the 'Staff' model already exists before compiling it.
-module.exports = mongoose.models.Staff || mongoose.model('Staff', StaffSchema);
+module.exports = mongoose.model('Staff', StaffSchema);

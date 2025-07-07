@@ -1,5 +1,4 @@
 // backend/controllers/staffController.js
-// --- FINAL CORRECTED VERSION ---
 
 const Staff = require('../models/Staff');
 const User = require('../models/User');
@@ -12,15 +11,14 @@ const mongoose = require('mongoose');
  * @route   POST /api/staff
  * @access  Private (Admin)
  */
-exports.createStaff = async (req, res) => {
+const createStaff = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-        const { contactPersonName, email, phone, address, role, employeeId } = req.body;
-        const companyId = req.user.company; // Company from authenticated admin user
+        const { contactPersonName, email, phone, address, role, employeeId, unavailabilityPeriods } = req.body;
+        const companyId = req.user.company;
 
-        // Basic validation
         if (!contactPersonName || !email) {
             await session.abortTransaction();
             session.endSession();
@@ -32,7 +30,6 @@ exports.createStaff = async (req, res) => {
             return res.status(400).json({ message: 'User is not associated with a company.' });
         }
 
-        // Check if Staff with this email already exists for this company (or globally if email unique)
         const existingStaff = await Staff.findOne({ email }).session(session);
         if (existingStaff) {
             await session.abortTransaction();
@@ -40,17 +37,15 @@ exports.createStaff = async (req, res) => {
             return res.status(400).json({ message: 'A staff member with this email already exists.' });
         }
 
-        // Check if a Mongoose User with this email already exists
         const existingUser = await User.findOne({ email }).session(session);
         if (existingUser) {
-             await session.abortTransaction();
-             session.endSession();
-             return res.status(400).json({ message: 'A user account with this email already exists (might be a customer or another admin). Cannot create staff profile.' });
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({ message: 'A user account with this email already exists (might be a customer or another admin). Cannot create staff profile.' });
         }
 
-        // 1. Create Firebase Auth User
         let firebaseUid;
-        const tempPassword = Math.random().toString(36).slice(-8); // Generate a temporary password
+        const tempPassword = Math.random().toString(36).slice(-8);
         try {
             const userRecord = await admin.auth().createUser({
                 email: email,
@@ -69,8 +64,6 @@ exports.createStaff = async (req, res) => {
             return res.status(500).json({ message: `Failed to create Firebase user: ${firebaseError.message}` });
         }
 
-        // 2. Create Mongoose Staff document
-        // --- FIX APPLIED HERE ---
         const staffData = {
             company: companyId,
             contactPersonName,
@@ -78,10 +71,9 @@ exports.createStaff = async (req, res) => {
             phone,
             address,
             role: role || 'staff',
+            unavailabilityPeriods: unavailabilityPeriods || []
         };
 
-        // Only add employeeId to the data if it's a non-empty string.
-        // This prevents saving empty strings and allows the sparse index to work correctly.
         if (employeeId && employeeId.trim() !== '') {
             staffData.employeeId = employeeId.trim();
         }
@@ -89,19 +81,16 @@ exports.createStaff = async (req, res) => {
         const newStaff = new Staff(staffData);
         await newStaff.save({ session });
 
-        // 3. Create Mongoose User document (linking to Firebase UID and Staff profile)
         const newUser = new User({
             firebaseUid: firebaseUid,
             email: email,
             role: role || 'staff',
             company: companyId,
             contactPersonName: contactPersonName,
-            staff: newStaff._id, // Link to the newly created staff profile
+            staff: newStaff._id,
         });
         await newUser.save({ session });
 
-
-        // 4. Send Welcome Email with temporary login details
         const loginSubject = 'Welcome! Your ServiceOS Staff Portal Login Details';
         const loginText = `Dear ${contactPersonName},\n\n` +
             `Your ServiceOS Staff Portal account has been created. ` +
@@ -118,7 +107,6 @@ exports.createStaff = async (req, res) => {
             `<p>Please log in using these details and consider changing your password immediately for security.</p>` +
             `<p>The ServiceOS Team</p>`;
 
-        // We don't need to await this, let it send in the background
         sendEmail(email, loginSubject, loginText, loginHtml).catch(err => {
             console.error("Failed to send welcome email:", err);
         });
@@ -136,9 +124,8 @@ exports.createStaff = async (req, res) => {
             const errors = Object.values(error.errors).map(err => err.message);
             return res.status(400).json({ message: `Validation failed: ${errors.join(', ')}` });
         }
-        // Catch the specific duplicate key error for employeeId
         if (error.code === 11000 && error.keyPattern && error.keyPattern.employeeId) {
-             return res.status(400).json({ message: 'A staff member with this Employee ID already exists.' });
+            return res.status(400).json({ message: 'A staff member with this Employee ID already exists.' });
         }
         res.status(500).json({ message: 'Failed to add staff member.', error: error.message });
     }
@@ -149,10 +136,16 @@ exports.createStaff = async (req, res) => {
  * @route   GET /api/staff
  * @access  Private (Admin, Manager)
  */
-exports.getStaff = async (req, res) => {
+const getStaff = async (req, res) => {
     try {
         const companyId = req.user.company;
-        const staffMembers = await Staff.find({ company: companyId }).sort({ contactPersonName: 1 });
+        const staffMembers = await Staff.find({ company: companyId })
+                                         .sort({ contactPersonName: 1 })
+                                         .select('+unavailabilityPeriods');
+
+        // Debug log: This will show what the backend is fetching from MongoDB
+        console.log("Backend: Staff fetched for frontend display (first staff member):", staffMembers[0]);
+
         res.status(200).json(staffMembers);
     } catch (error) {
         console.error('Error fetching staff:', error);
@@ -165,17 +158,17 @@ exports.getStaff = async (req, res) => {
  * @route   GET /api/staff/:id
  * @access  Private (Admin, Manager, Staff - self)
  */
-exports.getStaffById = async (req, res) => {
+const getStaffById = async (req, res) => {
     try {
         const staffId = req.params.id;
         const companyId = req.user.company;
 
-        const staffMember = await Staff.findOne({ _id: staffId, company: companyId });
+        const staffMember = await Staff.findOne({ _id: staffId, company: companyId })
+                                       .select('+unavailabilityPeriods');
 
         if (!staffMember) {
             return res.status(404).json({ message: 'Staff member not found.' });
         }
-        // Authorization check: Admin/Manager can view anyone in their company. Staff can only view their own profile.
         if (req.user.role === 'staff' && req.user.staff.toString() !== staffId) {
             return res.status(403).json({ message: 'Not authorized to view this staff profile.' });
         }
@@ -187,20 +180,21 @@ exports.getStaffById = async (req, res) => {
 };
 
 /**
- * @desc    Update a staff member's profile
- * @route   PUT /api/staff/:id
- * @access  Private (Admin, Manager, Staff - self)
+ * @desc Update a staff member's profile
+ * @route PUT /api/staff/:id
+ * @access Private (Admin, Manager, Staff - self)
  */
-exports.updateStaff = async (req, res) => {
+const updateStaff = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
         const staffId = req.params.id;
         const companyId = req.user.company;
-        const { contactPersonName, email, phone, address, role, employeeId } = req.body;
+        const { contactPersonName, email, phone, address, role, employeeId, unavailabilityPeriods } = req.body;
 
-        const staffMember = await Staff.findOne({ _id: staffId, company: companyId }).session(session);
+        // Find the staff member
+        let staffMember = await Staff.findOne({ _id: staffId, company: companyId }).session(session);
 
         if (!staffMember) {
             await session.abortTransaction();
@@ -218,33 +212,65 @@ exports.updateStaff = async (req, res) => {
             }
         }
 
-        // Update Staff profile
-        staffMember.contactPersonName = contactPersonName || staffMember.contactPersonName;
-        staffMember.phone = phone !== undefined ? phone : staffMember.phone;
-        staffMember.address = address || staffMember.address;
-        staffMember.updatedAt = Date.now();
+        // Prepare updates for the main staff document fields
+        const updateFields = {
+            contactPersonName: contactPersonName || staffMember.contactPersonName,
+            phone: phone !== undefined ? phone : staffMember.phone,
+            address: address || staffMember.address,
+            updatedAt: Date.now(),
+        };
 
-        // --- FIX APPLIED HERE ---
-        // Handle employeeId update carefully.
-        // This allows setting, updating, and removing (by sending an empty string) the ID.
         if (employeeId !== undefined) {
-            if (employeeId.trim() === '') {
-                // Unset the field if an empty string is provided
-                staffMember.employeeId = undefined;
-            } else {
-                staffMember.employeeId = employeeId;
-            }
+            updateFields.employeeId = employeeId.trim() === '' ? undefined : employeeId;
         }
 
-        // Only allow role change by admin
         if (role && role !== staffMember.role && req.user.role === 'admin') {
-            staffMember.role = role;
+            updateFields.role = role;
         }
-        await staffMember.save({ session });
+
+        // --- START OF UNUNAVAILABILITY PERIODS UPDATE LOGIC ---
+        console.log("Backend Update: Incoming unavailabilityPeriods from frontend:", unavailabilityPeriods);
+
+        let periodsToSave = [];
+        if (unavailabilityPeriods !== undefined && Array.isArray(unavailabilityPeriods)) {
+            periodsToSave = unavailabilityPeriods.map(period => ({
+                // If _id exists, include it. For new periods, it will be undefined, and Mongoose will generate.
+                ...(period._id && { _id: period._id }),
+                start: new Date(period.start),
+                end: new Date(period.end),
+                type: period.type,
+                reason: period.reason || ''
+            }));
+
+            for(const period of periodsToSave) { // Validate the mapped periods
+                if (isNaN(period.start.getTime()) || isNaN(period.end.getTime()) || period.start > period.end) {
+                    await session.abortTransaction();
+                    session.endSession();
+                    return res.status(400).json({ message: 'Invalid absence period: Start or end date is invalid or end date is before start date.' });
+                }
+                if (!period.type) {
+                    await session.abortTransaction();
+                    session.endSession();
+                    return res.status(400).json({ message: 'Invalid absence period: Missing type.' });
+                }
+            }
+        } else if (unavailabilityPeriods === null) {
+            periodsToSave = []; // Clear all periods if null is explicitly sent
+        }
+
+        // Use findByIdAndUpdate to directly update the fields, including the array.
+        // `new: true` returns the modified document.
+        // `runValidators: true` ensures schema validation runs on the update.
+        staffMember = await Staff.findByIdAndUpdate(
+            staffId,
+            { ...updateFields, unavailabilityPeriods: periodsToSave }, // Include unavailabilityPeriods here
+            { new: true, runValidators: true, session: session }
+        ).select('+unavailabilityPeriods'); // Ensure it's selected in the returned document
+
+        console.log("Backend Update: staffMember AFTER findByIdAndUpdate (check unavailabilityPeriods):", staffMember.unavailabilityPeriods);
 
 
         // Update the linked User profile (role, contactPersonName)
-        // Email changes are complex and generally discouraged. Handle separately if needed.
         const linkedUser = await User.findOne({ staff: staffId, company: companyId }).session(session);
         if (linkedUser) {
             if (role && role !== linkedUser.role && req.user.role === 'admin') {
@@ -257,6 +283,7 @@ exports.updateStaff = async (req, res) => {
         await session.commitTransaction();
         session.endSession();
 
+        // Return the updated staff member, which should now include unavailabilityPeriods
         res.status(200).json({ message: 'Staff member updated successfully.', staff: staffMember });
 
     } catch (error) {
@@ -279,7 +306,7 @@ exports.updateStaff = async (req, res) => {
  * @route   DELETE /api/staff/:id
  * @access  Private (Admin)
  */
-exports.deleteStaff = async (req, res) => {
+const deleteStaff = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -306,7 +333,6 @@ exports.deleteStaff = async (req, res) => {
             try {
                 await admin.auth().deleteUser(userAccount.firebaseUid);
             } catch (firebaseError) {
-                // Log the error but continue, as we still want to delete the DB records
                 console.warn(`Failed to delete Firebase user ${userAccount.email}:`, firebaseError.message);
             }
         }
@@ -332,10 +358,11 @@ exports.deleteStaff = async (req, res) => {
     }
 };
 
+// Export all functions explicitly at the end
 module.exports = {
-    createStaff: exports.createStaff,
-    getStaff: exports.getStaff,
-    getStaffById: exports.getStaffById,
-    updateStaff: exports.updateStaff,
-    deleteStaff: exports.deleteStaff,
+    createStaff,
+    getStaff,
+    getStaffById,
+    updateStaff,
+    deleteStaff,
 };

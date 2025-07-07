@@ -1,128 +1,79 @@
-// backend/models/Job.js
+// backend/models/Staff.js
 
 const mongoose = require('mongoose');
 
-// --- Subdocument Schema for Recurring Job Information ---
-const RecurringSchema = new mongoose.Schema({
-    pattern: {
-        type: String,
-        enum: ['none', 'daily', 'weekly', 'monthly', 'yearly'],
-        required: true,
-        default: 'none',
-    },
-    endDate: {
+// Define sub-schema for individual unavailability periods
+const UnavailabilityPeriodSchema = new mongoose.Schema({
+    start: {
         type: Date,
-        required: function() { return this.pattern !== 'none'; }
-    }
-}, { _id: false });
-
-// --- Subdocument Schema for Stock Items Used in a Job ---
-const UsedStockItemSchema = new mongoose.Schema({
-    stockItem: { // Reference to the actual StockItem document
-        type: mongoose.Schema.ObjectId,
-        ref: 'StockItem',
-        required: true,
+        required: [true, 'Start date is required for unavailability period'],
     },
-    quantityUsed: { // Quantity of this stock item used for this specific job
-        type: Number,
-        required: true,
-        min: 0,
-        default: 0,
+    end: {
+        type: Date,
+        required: [true, 'End date is required for unavailability period'],
     },
-}, { _id: false });
+    type: { // e.g., 'Holiday', 'Sick', 'Other'
+        type: String,
+        enum: ['Holiday', 'Sick', 'Other', 'Training', 'Emergency Holiday'],
+        required: [true, 'Absence type is required'],
+    },
+    reason: { // Optional reason/notes for the absence
+        type: String,
+        trim: true,
+        default: '',
+    },
+}, { _id: true });
 
 
-const JobSchema = new mongoose.Schema({
+const StaffSchema = new mongoose.Schema({
     company: {
         type: mongoose.Schema.ObjectId,
         ref: 'Company',
         required: true,
     },
-    customer: {
-        type: mongoose.Schema.ObjectId,
-        ref: 'Customer',
-        required: [true, 'Job must be linked to a customer'],
-    },
-    customerName: {
+    contactPersonName: {
         type: String,
-        required: [true, 'Customer name is required for job'],
+        required: [true, 'Staff name is required'],
         trim: true,
     },
-    assignedStaff: [{ // REFERS TO THE STAFF MODEL
-        type: mongoose.Schema.ObjectId,
-        ref: 'Staff', // Correctly references the Staff model
-    }],
-    serviceType: {
+    email: {
         type: String,
-        required: [true, 'Service type is required'],
+        required: [true, 'Staff email is required'],
+        unique: true,
         trim: true,
+        lowercase: true,
+        match: [/.+@.+\..+/, 'Please fill a valid email address']
     },
-    description: {
+    phone: {
         type: String,
         trim: true,
-    },
-    date: { // Scheduled start date of the job
-        type: Date,
-        required: [true, 'Job date is required'],
-    },
-    time: { // Scheduled start time of the job (HH:MM string)
-        type: String,
-        required: [true, 'Job time is required'],
-        match: [/^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$/, 'Please use HH:MM format for job time'],
-    },
-    duration: { // Estimated duration of the job in minutes
-        type: Number,
-        required: [true, 'Job duration is required'],
-        min: 5,
-    },
-    recurring: {
-        type: RecurringSchema,
-        required: false
-    },
-    endDate: { // This is now ONLY for non-recurring, multi-day jobs
-        type: Date,
-        required: false,
-    },
-    status: {
-        type: String,
-        enum: ['Booked', 'Confirmed', 'In Progress', 'Completed', 'Invoiced', 'Invoice Paid', 'Cancelled', 'Pending', 'On Hold'],
-        default: 'Booked',
+        default: ''
     },
     address: {
-        street: { type: String, trim: true },
-        city: { type: String, trim: true },
-        county: { type: String, trim: true },
-        postcode: { type: String, trim: true },
-        country: { type: String, trim: true },
+        street: { type: String, trim: true, default: '' },
+        city: { type: String, trim: true, default: '' },
+        county: { type: String, trim: true, default: '' },
+        postcode: { type: String, trim: true, default: '' },
+        country: { type: String, trim: true, default: '' },
     },
-    notes: {
+    role: {
+        type: String,
+        enum: ['staff', 'manager'],
+        default: 'staff',
+    },
+    employeeId: {
         type: String,
         trim: true,
+        unique: true,
+        sparse: true,
     },
-    usedStockItems: { // Field to store stock items used for this job
-        type: [UsedStockItemSchema],
+    hireDate: {
+        type: Date,
+        default: Date.now,
+    },
+    unavailabilityPeriods: {
+        type: [UnavailabilityPeriodSchema],
         default: [],
-    },
-    convertedFromQuote: {
-        type: mongoose.Schema.ObjectId,
-        ref: 'Quote',
-        required: false,
-    },
-    convertedFromBookingForm: {
-        type: mongoose.Schema.ObjectId,
-        ref: 'Submission',
-        required: false,
-    },
-    clockIn: { type: Date },
-    clockOut: { type: Date },
-    clockInLocation: { latitude: Number, longitude: Number },
-    clockOutLocation: { latitude: Number, longitude: Number },
-    photos: [{ url: String, caption: String }],
-    completedTasks: mongoose.Schema.Types.Mixed,
-    createdBy: {
-        type: mongoose.Schema.ObjectId,
-        ref: 'User',
-        required: true,
     },
     createdAt: {
         type: Date,
@@ -134,10 +85,11 @@ const JobSchema = new mongoose.Schema({
     },
 });
 
-JobSchema.pre('save', function(next) {
+StaffSchema.pre('save', function(next) {
     this.updatedAt = Date.now();
     next();
 });
 
-module.exports = mongoose.model('Job', JobSchema);
-
+// THIS IS THE FIX FOR OverwriteModelError
+// Check if the 'Staff' model already exists before compiling it.
+module.exports = mongoose.models.Staff || mongoose.model('Staff', StaffSchema);

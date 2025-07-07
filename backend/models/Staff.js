@@ -2,6 +2,29 @@
 
 const mongoose = require('mongoose');
 
+// Define sub-schema for individual unavailability periods
+const UnavailabilityPeriodSchema = new mongoose.Schema({
+    start: {
+        type: Date,
+        required: [true, 'Start date is required for unavailability period'],
+    },
+    end: {
+        type: Date,
+        required: [true, 'End date is required for unavailability period'],
+    },
+    type: { // e.g., 'Holiday', 'Sick', 'Other'
+        type: String,
+        enum: ['Holiday', 'Sick', 'Other', 'Training', 'Emergency Holiday'], // Ensure enum matches frontend
+        required: [true, 'Absence type is required'],
+    },
+    reason: { // Optional reason/notes for the absence
+        type: String,
+        trim: true,
+        default: '',
+    },
+}, { _id: true }); // Explicitly set _id to true, though it's default behavior
+
+
 const StaffSchema = new mongoose.Schema({
     company: {
         type: mongoose.Schema.ObjectId,
@@ -13,10 +36,10 @@ const StaffSchema = new mongoose.Schema({
         required: [true, 'Staff name is required'],
         trim: true,
     },
-    email: { // Staff member's primary email (should match their User.email)
+    email: {
         type: String,
         required: [true, 'Staff email is required'],
-        unique: true, // This *should* be unique for staff members within a company
+        unique: true,
         trim: true,
         lowercase: true,
         match: [/.+@.+\..+/, 'Please fill a valid email address']
@@ -48,6 +71,11 @@ const StaffSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
     },
+    // THIS IS THE CRITICAL FIELD
+    unavailabilityPeriods: {
+        type: [UnavailabilityPeriodSchema], // Array of subdocuments
+        default: [], // Default to an empty array
+    },
     createdAt: {
         type: Date,
         default: Date.now,
@@ -63,4 +91,6 @@ StaffSchema.pre('save', function(next) {
     next();
 });
 
-module.exports = mongoose.model('Staff', StaffSchema);
+// THIS IS THE FIX FOR OverwriteModelError
+// Check if the 'Staff' model already exists before compiling it.
+module.exports = mongoose.models.Staff || mongoose.model('Staff', StaffSchema);

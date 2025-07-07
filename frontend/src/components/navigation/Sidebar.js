@@ -13,11 +13,10 @@ import {
     EnvelopeIcon, ClipboardDocumentListIcon, BuildingLibraryIcon,
     BuildingOffice2Icon, MegaphoneIcon, ShoppingBagIcon,
     Package // Import Package icon for Stock
-} from '@heroicons/react/24/outline'; // Assuming Heroicons
+} from '@heroicons/react/24/outline'; // Assuming Heroicons are your primary icons
 
-// Also import lucide-react icons if used elsewhere in Sidebar (like SearchIconLucide)
-import { Mail as MailIconLucide } from 'lucide-react'; // NEW: Mail icon for Email Templates
-import { Search as SearchIconLucide } from 'lucide-react'; // Assuming you use this for Spot Checker
+// Assuming these icons are used and imported from lucide-react in Sidebar
+import { Mail as MailIconLucide, Search as SearchIconLucide, Route as RouteIconLucide, UserX as UserXIconLucide } from 'lucide-react'; // NEW: Import UserX icon for Staff Absence
 
 
 const Sidebar = ({ isOpen, toggleSidebar, user, logout, className }) => {
@@ -58,6 +57,8 @@ const Sidebar = ({ isOpen, toggleSidebar, user, logout, className }) => {
             isGroup: true,
             children: [
                 { name: 'Staff', path: '/staff', icon: UsersIcon, roles: ['admin', 'manager'] },
+                // NEW: Staff Absence Link
+                { name: 'Staff Absence', path: '/staff-absence', icon: UserXIconLucide, roles: ['admin', 'manager'] }, // Admin/Manager can manage
                 { name: 'Jobs', path: '/jobs', icon: BriefcaseIcon, roles: ['admin', 'staff', 'manager'] },
                 { name: 'Invoices', path: '/invoices', icon: DocumentTextIcon, roles: ['admin', 'manager', 'staff'] },
                 { name: 'Quotes', path: '/quotes', icon: ClipboardDocumentListIcon, roles: ['admin', 'manager', 'staff'] },
@@ -75,8 +76,7 @@ const Sidebar = ({ isOpen, toggleSidebar, user, logout, className }) => {
             roles: ['admin'],
             isGroup: true,
             children: [
-                { name: 'Route Planner', path: '/route-planner', icon: MapIcon, roles: ['admin'] },
-                // NEW: Email Templates Link - using MailIconLucide
+                { name: 'Route Planner', path: '/route-planner', icon: RouteIconLucide, roles: ['admin', 'manager'] },
                 { name: 'Email Templates', path: '/email-templates', icon: MailIconLucide, roles: ['admin'] },
                 { name: 'Form Builder', path: '/form-builder', icon: BuildingLibraryIcon, roles: ['admin'] },
                 { name: 'Settings', path: '/settings', icon: CogIcon, roles: ['admin'] },

@@ -1,0 +1,46 @@
+# Node.js generated modules
+node_modules/
+dist/
+build/
+.parcel-cache/ # For Parcel bundler if you use it
+
+# environment variables - VERY IMPORTANT FOR SECURITY!
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# OS generated files
+.DS_Store # macOS specific
+Thumbs.db # Windows specific
+Desktop.ini # Windows specific
+
+# IDE / editor files
+.vscode/ # VS Code settings
+.idea/   # IntelliJ/WebStorm settings
+*.swp    # Vim swap files
+*~       # Emacs backup files
+# Temporary files from editors/OS
+*.tmp
+*.bak
+*.swo
+
+# Firebase Admin SDK credentials (VERY IMPORTANT FOR SECURITY - these should NOT be pushed)
+backend/config/serviceAccountKey.json
+
+# Uploaded files (if your backend saves user-uploaded content)
+backend/uploads/
+
+# npm package lock files (if generated in sub-directories by older npm versions)
+# Generally, it's better to manage them at the root, but including for completeness
+**/package-lock.json
+**/yarn.lock 

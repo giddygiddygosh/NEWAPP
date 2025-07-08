@@ -1,8 +1,8 @@
-// backend/controllers/settingController.js
+// backend/controllers/settingsController.js
 
 const asyncHandler = require('express-async-handler');
-const CompanySetting = require('../models/CompanySetting'); // Assuming your CompanySetting model is here
-const Company = require('../models/Company'); // Assuming you might need Company for getting company name
+const CompanySetting = require('../models/CompanySetting');
+const Company = require('../models/Company'); // Ensure Company model is imported if not already
 
 /**
  * @desc Get company settings for the authenticated company
@@ -10,10 +10,11 @@ const Company = require('../models/Company'); // Assuming you might need Company
  * @access Private (Admin, Manager, Staff)
  */
 const getCompanySettings = asyncHandler(async (req, res) => {
-    // req.user.company should be available from your protect middleware
     const companyId = req.user.company;
 
-    const settings = await CompanySetting.findOne({ company: companyId });
+    // FIX: Add .populate('company', 'name appId') to fetch the company details
+    const settings = await CompanySetting.findOne({ company: companyId })
+                                         .populate('company', 'name appId'); // <--- ADDED THIS LINE
 
     if (!settings) {
         // If no settings exist for the company, you might want to create default ones
@@ -23,7 +24,7 @@ const getCompanySettings = asyncHandler(async (req, res) => {
         throw new Error('Company settings not found.');
     }
 
-    res.status(200).json(settings);
+    res.status(200).json(settings); // The 'settings' object sent here will now have 'company' populated
 });
 
 /**
@@ -42,13 +43,21 @@ const updateCompanySettings = asyncHandler(async (req, res) => {
         labelColor,
         inputButtonBorderRadius,
         defaultCurrency,
-        emailAutomation // This will contain all email settings (welcome_email, staff_welcome_email etc.)
+        emailAutomation,
+        // These fields are for the Company model, not CompanySetting directly
+        name, // This is the companyName from frontend payload
+        address, // This is companyAddress from frontend payload
+        phone, // This is companyPhone from frontend payload
+        email, // This is companyEmail from frontend payload
+        website, // This is companyWebsite from frontend payload
+        taxId // This is companyTaxId from frontend payload
     } = req.body;
 
+    // Find the CompanySetting document
     let settings = await CompanySetting.findOne({ company: companyId });
 
     if (!settings) {
-        // If settings don't exist, create them
+        // If settings don't exist, create them (this path is less common for updates)
         settings = await CompanySetting.create({
             company: companyId,
             companyLogoUrl,
@@ -61,10 +70,9 @@ const updateCompanySettings = asyncHandler(async (req, res) => {
             defaultCurrency,
             emailAutomation
         });
-        return res.status(201).json(settings);
     }
 
-    // Update existing settings
+    // Update CompanySetting fields
     settings.companyLogoUrl = companyLogoUrl ?? settings.companyLogoUrl;
     settings.defaultFormName = defaultFormName ?? settings.defaultFormName;
     settings.backgroundColor = backgroundColor ?? settings.backgroundColor;
@@ -85,10 +93,8 @@ const updateCompanySettings = asyncHandler(async (req, res) => {
 
     // Update nested emailAutomation object
     if (emailAutomation) {
-        // Iterate over the keys in emailAutomation and update them
         for (const key in emailAutomation) {
             if (settings.emailAutomation.hasOwnProperty(key)) {
-                // Ensure nested properties like 'enabled' are updated correctly
                 if (typeof emailAutomation[key] === 'object' && emailAutomation[key] !== null) {
                     for (const subKey in emailAutomation[key]) {
                         if (settings.emailAutomation[key].hasOwnProperty(subKey)) {
@@ -102,8 +108,30 @@ const updateCompanySettings = asyncHandler(async (req, res) => {
         }
     }
 
+    // --- Handle updates to the Company model directly ---
+    const companyDoc = await Company.findById(companyId);
+    if (companyDoc) {
+        companyDoc.name = name ?? companyDoc.name; // Update company name
+        companyDoc.address = address ?? companyDoc.address; // Update company address
+        companyDoc.phone = phone ?? companyDoc.phone;
+        companyDoc.email = email ?? companyDoc.email;
+        companyDoc.website = website ?? companyDoc.website;
+        companyDoc.taxId = taxId ?? companyDoc.taxId;
+        await companyDoc.save();
+    } else {
+        console.warn(`Company document with ID ${companyId} not found during settings update.`);
+    }
+
     const updatedSettings = await settings.save();
-    res.status(200).json(updatedSettings);
+
+    // When returning, populate company again to ensure frontend gets the updated name
+    const finalSettings = await CompanySetting.findById(updatedSettings._id)
+                                              .populate('company', 'name appId'); // <--- Populate here for response
+
+    res.status(200).json({
+        message: 'Company settings updated successfully.',
+        settings: finalSettings // Send the populated settings
+    });
 });
 
 

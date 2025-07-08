@@ -1,5 +1,3 @@
-// File: src/components/staff/StaffAbsenceFormModal.js
-
 import React, { useState, useEffect } from 'react';
 import Modal from '../common/Modal';
 import ModernInput from '../common/ModernInput';
@@ -10,9 +8,9 @@ const StaffAbsenceFormModal = ({
     isOpen,
     onClose,
     onSave,
-    staffMembers,      // The full list of staff for the dropdown
-    editingAbsence,    // The absence object being edited, or null for new
-    selectedStaff,     // The staff member whose absence is being edited
+    staffMembers = [],
+    editingAbsence,
+    selectedStaff,
 }) => {
     const [formData, setFormData] = useState({});
     const [error, setError] = useState('');
@@ -25,32 +23,37 @@ const StaffAbsenceFormModal = ({
         { value: 'Other', label: 'Other' },
     ];
 
-    // This effect runs when the modal opens to set the form's initial state
+    // This effect runs when the modal opens or when editingAbsence changes
     useEffect(() => {
-        if (isOpen) {
-            setError(''); // Reset errors when modal opens
-            if (editingAbsence) {
-                // We are editing an existing absence
-                setFormData({
-                    _id: editingAbsence._id,
-                    staffId: selectedStaff._id,
-                    start: new Date(editingAbsence.start).toISOString().split('T')[0],
-                    end: new Date(editingAbsence.end).toISOString().split('T')[0],
-                    type: editingAbsence.type,
-                    reason: editingAbsence.reason || '',
-                });
-            } else {
-                // We are adding a new absence
-                setFormData({
-                    staffId: staffMembers[0]?._id || '', // Default to the first staff member
-                    start: new Date().toISOString().split('T')[0],
-                    end: '',
-                    type: 'Holiday',
-                    reason: '',
-                });
-            }
+        if (!isOpen) {
+            // If modal is closed, do nothing or reset form if needed
+            return;
         }
-    }, [isOpen, editingAbsence, selectedStaff, staffMembers]);
+
+        setError(''); // Reset errors when modal opens
+
+        if (editingAbsence) {
+            // Editing an existing absence
+            setFormData({
+                _id: editingAbsence._id,
+                staffId: selectedStaff?._id || '', // Added optional chaining for safety
+                start: new Date(editingAbsence.start).toISOString().split('T')[0],
+                end: new Date(editingAbsence.end).toISOString().split('T')[0],
+                type: editingAbsence.type,
+                reason: editingAbsence.reason || '',
+            });
+        } else {
+            // Adding a new absence
+            setFormData({
+                // Default to the first staff member's ID if available, otherwise empty string
+                staffId: staffMembers[0]?._id || '',
+                start: new Date().toISOString().split('T')[0],
+                end: '',
+                type: 'Holiday',
+                reason: '',
+            });
+        }
+    }, [isOpen, editingAbsence, selectedStaff, staffMembers]); // Dependencies
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -68,7 +71,6 @@ const StaffAbsenceFormModal = ({
             setError('End date cannot be before the start date.');
             return;
         }
-        // onSave is provided by the parent. It handles the API call.
         onSave(formData);
     };
 

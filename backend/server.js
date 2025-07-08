@@ -91,7 +91,7 @@ app.get('/test-ping', (req, res) => {
 });
 // --- END /test-ping ROUTE ---
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5004;
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

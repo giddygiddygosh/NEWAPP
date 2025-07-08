@@ -1,43 +1,30 @@
-// File: backend/routes/staffRoutes.js (FINAL CORRECTED ORDER)
-
 const express = require('express');
 const router = express.Router();
 const { protect, authorize } = require('../middleware/authMiddleware');
 
+// Import all the functions from your absenceController
 const {
-    createStaff,
-    getStaff,
-    getStaffById,
-    updateStaff,
-    deleteStaff,
-    addStaffAbsence,
-    updateStaffAbsence,
-    deleteStaffAbsence,
-    getStaffAbsences,
-} = require('../controllers/staffController');
+    createAbsence,
+    getAbsences,
+    getAbsenceById,
+    updateAbsence,
+    deleteAbsence,
+    getStaffAbsences
+} = require('../controllers/absenceController');
 
-
-// General routes for the whole staff list
+// Route for getting all absences (for admins/managers) and creating a new one
 router.route('/')
-    .get(protect, authorize(['admin', 'manager', 'staff']), getStaff)
-    .post(protect, authorize(['admin']), createStaff);
+    .get(protect, authorize('admin', 'manager'))
+    .post(protect, authorize('admin', 'manager', 'staff'));
 
-// --- ABSENCE ROUTES MUST COME BEFORE THE GENERIC '/:id' ROUTE ---
+// Route for getting all absences for a specific staff member
+router.route('/staff/:staffId')
+    .get(protect, authorize('admin', 'manager', 'staff'));
 
-// GET all absences for a staff member
-router.get('/:staffId/absences', protect, authorize(['admin', 'manager', 'staff']), getStaffAbsences);
-// POST a new absence for a staff member
-router.post('/:staffId/absences', protect, authorize(['admin', 'manager', 'staff']), addStaffAbsence);
-// PUT (update) a specific absence for a staff member
-router.put('/:staffId/absences/:absenceId', protect, authorize(['admin', 'manager', 'staff']), updateStaffAbsence);
-// DELETE a specific absence for a staff member
-router.delete('/:staffId/absences/:absenceId', protect, authorize(['admin', 'manager', 'staff']), deleteStaffAbsence);
-
-
-// --- Generic route for a single staff member BY THEIR ID comes last ---
+// Routes for a specific absence period by its ID
 router.route('/:id')
-    .get(protect, authorize(['admin', 'manager', 'staff']), getStaffById)
-    .put(protect, authorize(['admin', 'manager', 'staff']), updateStaff)
-    .delete(protect, authorize(['admin']), deleteStaff);
+    .get(protect, authorize('admin', 'manager', 'staff'))
+    .put(protect, authorize('admin', 'manager', 'staff'))
+    .delete(protect, authorize('admin', 'manager', 'staff'));
 
 module.exports = router;

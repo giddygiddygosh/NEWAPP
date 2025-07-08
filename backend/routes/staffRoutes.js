@@ -1,9 +1,10 @@
-// File: backend/routes/staffRoutes.js (FINAL CORRECTED ORDER)
+// backend/routes/staffRoutes.js
 
 const express = require('express');
 const router = express.Router();
 const { protect, authorize } = require('../middleware/authMiddleware');
 
+// Import controller functions (ensure new absence and sendRoute functions are imported)
 const {
     createStaff,
     getStaff,
@@ -13,31 +14,28 @@ const {
     addStaffAbsence,
     updateStaffAbsence,
     deleteStaffAbsence,
-    getStaffAbsences,
+    sendRouteToStaff // <-- ADDED: Import this new function
 } = require('../controllers/staffController');
 
-
-// General routes for the whole staff list
+// Define the main staff routes
 router.route('/')
-    .get(protect, authorize(['admin', 'manager', 'staff']), getStaff)
-    .post(protect, authorize(['admin']), createStaff);
+    .post(protect, authorize('admin', 'manager'), createStaff)
+    .get(protect, authorize('admin', 'manager'), getStaff);
 
-// --- ABSENCE ROUTES MUST COME BEFORE THE GENERIC '/:id' ROUTE ---
-
-// GET all absences for a staff member
-router.get('/:staffId/absences', protect, authorize(['admin', 'manager', 'staff']), getStaffAbsences);
-// POST a new absence for a staff member
-router.post('/:staffId/absences', protect, authorize(['admin', 'manager', 'staff']), addStaffAbsence);
-// PUT (update) a specific absence for a staff member
-router.put('/:staffId/absences/:absenceId', protect, authorize(['admin', 'manager', 'staff']), updateStaffAbsence);
-// DELETE a specific absence for a staff member
-router.delete('/:staffId/absences/:absenceId', protect, authorize(['admin', 'manager', 'staff']), deleteStaffAbsence);
-
-
-// --- Generic route for a single staff member BY THEIR ID comes last ---
 router.route('/:id')
-    .get(protect, authorize(['admin', 'manager', 'staff']), getStaffById)
-    .put(protect, authorize(['admin', 'manager', 'staff']), updateStaff)
-    .delete(protect, authorize(['admin']), deleteStaff);
+    .get(protect, authorize('admin', 'manager', 'staff'), getStaffById)
+    .put(protect, authorize('admin', 'manager'), updateStaff)
+    .delete(protect, authorize('admin'), deleteStaff);
+
+// Routes for staff absences
+router.route('/:staffId/absences')
+    .post(protect, authorize('admin', 'manager'), addStaffAbsence);
+
+router.route('/:staffId/absences/:absenceId')
+    .put(protect, authorize('admin', 'manager'), updateStaffAbsence)
+    .delete(protect, authorize('admin', 'manager'), deleteStaffAbsence);
+
+// NEW ROUTE FOR SENDING ROUTES TO STAFF (Add this)
+router.post('/send-route', protect, authorize('admin', 'manager'), sendRouteToStaff); // <-- ADDED: Route for POST /api/staff/send-route
 
 module.exports = router;

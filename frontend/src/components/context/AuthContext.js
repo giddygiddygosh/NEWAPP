@@ -36,6 +36,8 @@ export const AuthProvider = ({ children }) => {
                     if (response.data.user) {
                         localStorage.setItem('token', response.data.token);
                         currentUserData = response.data.user;
+                        // --- CHANGED LOG: Stringify to see full object content ---
+                        console.log('[AUTH_STATE_SUPER_DEBUG] User data from backend:', JSON.stringify(currentUserData, null, 2));
                     }
                 } catch (error) {
                     console.error("[AUTH_STATE_SUPER_DEBUG] Error verifying Firebase token with backend:", error.response?.data || error.message);
@@ -71,6 +73,8 @@ export const AuthProvider = ({ children }) => {
             const { token, user: mongooseUser } = response.data;
             localStorage.setItem('token', token);
             setUser(mongooseUser);
+            // --- CHANGED LOG: Stringify to see full object content ---
+            console.log('[AuthContext] User data from backend after login:', JSON.stringify(mongooseUser, null, 2));
             return mongooseUser;
         } catch (error) {
             console.error('Firebase Email/Password Login failed:', error.message);
@@ -107,6 +111,8 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem('token', token);
             setUser(mongooseUser);
             console.log('[AuthContext] Signup successful. User state set.');
+            // --- CHANGED LOG: Stringify to see full object content ---
+            console.log('[AuthContext] User data from backend after signup:', JSON.stringify(mongooseUser, null, 2));
             
             return mongooseUser;
 
@@ -139,6 +145,8 @@ export const AuthProvider = ({ children }) => {
             const { token, user: mongooseUser } = response.data;
             localStorage.setItem('token', token);
             setUser(mongooseUser);
+            // --- CHANGED LOG: Stringify to see full object content ---
+            console.log('[AuthContext] User data from backend after Google login:', JSON.stringify(mongooseUser, null, 2));
             return mongooseUser;
         } catch (error) {
             console.error('Google login error (AuthContext):', error);
@@ -175,6 +183,9 @@ export const AuthProvider = ({ children }) => {
 
     return (
         <AuthContext.Provider value={value}>
+            {/* Only render children when loading is false. */}
+            {/* This ensures the initial "Loading staff profile..." in StaffDashboard */}
+            {/* has a chance to evaluate the full user object, including `user.staff`. */}
             {!loading && children}
         </AuthContext.Provider>
     );

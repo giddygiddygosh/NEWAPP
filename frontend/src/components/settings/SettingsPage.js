@@ -36,7 +36,7 @@ const SettingsPage = () => {
         companyPhone: '', // From CompanySetting
         companyEmail: '', // From CompanySetting
         companyWebsite: '', // From CompanySetting
-        companyTaxId: '', // From CompanySetting
+        companyTaxId: '',
 
         // UI Styling Overrides
         backgroundColor: '#FFFFFF',
@@ -461,7 +461,7 @@ const SettingsPage = () => {
     };
 
 
-    if (loading || authLoading || currencyLoading) { // Combined loading states
+    if (loading || authLoading || currencyLoading) {
         return (
             <div className="flex items-center justify-center min-h-[calc(100vh-80px)]">
                 <Loader />
@@ -469,9 +469,9 @@ const SettingsPage = () => {
         );
     }
 
-    const canAccessCompanyCurrencySettings = user?.role === 'admin'; // Only admin can modify
+    const canAccessCompanyCurrencySettings = user?.role === 'admin';
 
-    const displayError = error || currencyError; // Prioritize local errors, then currency context errors
+    const displayError = error || currencyError;
 
     return (
         <div className="p-8 bg-white rounded-xl shadow-lg max-w-4xl mx-auto">
@@ -507,6 +507,7 @@ const SettingsPage = () => {
                     >
                         Currency Preferences
                     </button>
+                    {/* Removed Email Automation tab from this version */}
                     <button
                         type="button"
                         onClick={() => setActiveTab('my-account')}
@@ -517,7 +518,7 @@ const SettingsPage = () => {
                 </nav>
             </div>
 
-            {/* Tab Content */}
+            {/* Tab Content: Company Details */}
             {activeTab === 'company' && (
                 <form onSubmit={handleSaveCompanySettings} className="space-y-6">
                     {/* Company Name */}
@@ -593,11 +594,11 @@ const SettingsPage = () => {
                     <h3 className="text-xl font-semibold text-gray-800 mt-4">Address Details</h3>
                     <AddressInput
                         label="Company Address"
-                        address={localSettings.companyAddress} // This is where the undefined 'street' is coming from
+                        address={localSettings.companyAddress}
                         onChange={handleCompanyAddressChange}
                         fieldName="companyAddress"
-                        // isMapsLoaded={isMapsLoaded} // Should be passed from AppContent
-                        // isMapsLoadError={isMapsLoadError} // Should be passed from AppContent
+                        // isMapsLoaded={isMapsLoaded} // Should be passed from AppContent if needed
+                        // isMapsLoadError={isMapsLoadError} // Should be passed from AppContent if needed
                     />
 
                     <ModernInput
@@ -620,6 +621,7 @@ const SettingsPage = () => {
                 </form>
             )}
 
+            {/* Tab Content: Currency Preferences */}
             {activeTab === 'currency' && (
                 <form onSubmit={handleSaveCompanySettings} className="p-6 border rounded-lg bg-gray-50/80 space-y-6">
                     <h3 className="text-xl font-semibold text-gray-800 mb-4">Currency Preferences</h3>
@@ -691,6 +693,7 @@ const SettingsPage = () => {
                 </form>
             )}
 
+            {/* Tab Content: My Account */}
             {activeTab === 'my-account' && (
                 <div className="space-y-8">
                     <form onSubmit={handleSaveProfile} className="p-6 border border-gray-200 rounded-lg shadow-sm space-y-4">
@@ -722,7 +725,7 @@ const SettingsPage = () => {
                         </div>
                     </form>
 
-                    <form onSubmit={handleChangePassword} className="p-6 border border-gray-200 rounded-lg shadow-sm space-y-4">
+                    <form onSubmit={handleChangeEmail} className="p-6 border border-gray-200 rounded-lg shadow-sm space-y-4">
                         <h3 className="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Change Email Address</h3>
                         <ModernInput
                             label="New Email Address"

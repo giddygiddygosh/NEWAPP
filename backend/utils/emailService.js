@@ -1,5 +1,3 @@
-// ServiceOS/backend/utils/emailService.js
-
 const nodemailer = require('nodemailer');
 
 // Create a transporter using Ethereal's SMTP details
@@ -12,8 +10,8 @@ const transporter = nodemailer.createTransport({
     secure: false,               // false for STARTTLS (port 587) (remains the same)
     auth: {
         // THIS MUST BE THE EMAIL YOU ARE LOGGED INTO ON ETHEREAL TO VIEW EMAILS
-        user: 'quincy.emmerich@ethereal.email', // <--- CHECK THIS LINE CAREFULLY
-        pass: '2zX8HmBNv9EgwWusYD'             // <--- ENSURE THIS IS THE CORRECT PASSWORD FOR quincy.emmerich
+        user: 'mike31@ethereal.email', // <--- UPDATED to mike31@ethereal.email
+        pass: 'dSVbFPh5XetvBDsnHg'     // <--- UPDATED to the new password
     },
     tls: {
         rejectUnauthorized: false // Needed for Ethereal over STARTTLS (remains the same)
@@ -23,7 +21,7 @@ const transporter = nodemailer.createTransport({
 const sendEmail = async (to, subject, text, html) => {
     const mailOptions = {
         // IMPORTANT: The 'from' address MUST match the 'user' in the 'auth' block above for Ethereal to send correctly.
-        from: 'ServiceOS <quincy.emmerich@ethereal.email>', // <--- CHECK THIS LINE CAREFULLY
+        from: 'ServiceOS <mike31@ethereal.email>', // <--- UPDATED to mike31@ethereal.email
         to, // list of receivers (this should be the actual staff member's email)
         subject, // Subject line
         text, // plain text body

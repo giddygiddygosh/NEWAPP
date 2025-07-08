@@ -1,5 +1,3 @@
-// File: backend/models/Staff.js
-
 const mongoose = require('mongoose');
 
 // This defines the structure for each individual absence period
@@ -38,7 +36,7 @@ const StaffSchema = new mongoose.Schema({
     email: {
         type: String,
         required: [true, 'Email is required'],
-        unique: true,
+        unique: true, // Email should remain unique
         trim: true,
         lowercase: true,
     },
@@ -61,8 +59,9 @@ const StaffSchema = new mongoose.Schema({
     employeeId: {
         type: String,
         trim: true,
-        unique: true,
-        sparse: true, // Allows multiple null values but unique if value exists
+        // THIS LINE MUST BE COMPLETELY REMOVED OR COMMENTED OUT:
+        // unique: true, 
+        sparse: true, // Keep sparse to avoid indexing missing fields, but it won't enforce uniqueness on nulls anymore.
     },
     // This is the critical part: an array of absence periods embedded in the staff document
     unavailabilityPeriods: {

@@ -52,7 +52,7 @@ const CompanySettingSchema = new mongoose.Schema({
     },
     // NEW: Email Automation Settings
     emailAutomation: {
-        welcome_email: { enabled: { type: Boolean, default: false } }, // Optional: Admin can toggle
+        welcome_email: { enabled: { type: Boolean, default: true } }, // <--- CHANGED THIS FROM 'false' TO 'true'
         appointment_reminder: {
             enabled: { type: Boolean, default: false },
             daysBefore: { type: Number, default: 1, min: 0 }, // e.g., 1 day before

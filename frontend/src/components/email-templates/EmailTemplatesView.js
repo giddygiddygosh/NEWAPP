@@ -13,6 +13,8 @@ const TEMPLATE_TYPES = [
     { id: 'invoice_reminder', defaultName: 'Invoice Reminder', description: 'Reminds customers about outstanding invoices.' },
     { id: 'review_request', defaultName: 'Review Request', description: 'Asks customers to leave a review after a job.' },
     { id: 'invoice_template', defaultName: 'Invoice Template', description: 'Template for general invoice display/email.' },
+    // NEW: Staff Welcome Email Template Type
+    { id: 'staff_welcome_email', defaultName: 'Staff Welcome Email', description: 'Sent to new staff members to set up their account.' }, // <--- ADD THIS LINE
 ];
 
 const EmailTemplatesView = () => {
@@ -23,7 +25,7 @@ const EmailTemplatesView = () => {
     const [templateSubject, setTemplateSubject] = useState('');
     const [templateBody, setTemplateBody] = useState('');
     const [headerImageFile, setHeaderImageFile] = useState(null);
-    const [headerImageUrl, setHeaderImageUrl] = useState(''); // ✅ FIX: Corrected useState declaration
+    const [headerImageUrl, setHeaderImageUrl] = useState('');
     const fileInputRef = useRef(null);
     const [loadingTemplates, setLoadingTemplates] = useState(true);
     const [savingTemplate, setSavingTemplate] = useState(false);
@@ -136,7 +138,6 @@ const EmailTemplatesView = () => {
                 ) : (
                     <ul className="divide-y divide-gray-200">
                         {templates.map(template => (
-                            // CONFIRMED: Key prop is present and unique
                             <li key={template.id || template.templateType} className="p-4 flex justify-between items-center hover:bg-gray-50 rounded-lg">
                                 <div>
                                     <p className="font-semibold text-lg text-gray-800">{template.name}</p>
@@ -159,12 +160,68 @@ const EmailTemplatesView = () => {
 
             <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={`Edit ${editingTemplate?.name || ''}`}>
                 <div className="p-6 space-y-4">
-                    {/* Form fields... */}
+                    {/* Add content of your modal form fields here if not already */}
+                    <ModernInput
+                        label="Template Name"
+                        value={templateName}
+                        onChange={(e) => setTemplateName(e.target.value)}
+                        required
+                    />
+                    <ModernInput
+                        label="Subject Line"
+                        value={templateSubject}
+                        onChange={(e) => setTemplateSubject(e.target.value)}
+                        required
+                    />
+                    {/* For the body, consider a textarea or rich text editor */}
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email Body</label>
+                    <textarea
+                        value={templateBody}
+                        onChange={(e) => setTemplateBody(e.target.value)}
+                        required
+                        rows="10"
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        placeholder="Use {placeholder} for dynamic content, e.g., {customerName}, {companyName}, {passwordResetLink}."
+                    />
+
+                    {/* Header Image Upload */}
+                    <div className="mt-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Header Image</label>
+                        <div className="flex items-center space-x-4">
+                            {headerImageUrl && (
+                                <div className="relative w-32 h-32 border border-gray-300 rounded-lg overflow-hidden flex items-center justify-center bg-gray-100">
+                                    <img src={headerImageUrl} alt="Header Preview" className="max-w-full max-h-full object-contain" />
+                                    <button
+                                        type="button"
+                                        onClick={handleRemoveImage}
+                                        className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                                        aria-label="Remove image"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                            )}
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleFileChange}
+                                ref={fileInputRef}
+                                className="block w-full text-sm text-gray-500
+                                    file:mr-4 file:py-2 file:px-4
+                                    file:rounded-md file:border-0
+                                    file:text-sm file:font-semibold
+                                    file:bg-blue-50 file:text-blue-700
+                                    hover:file:bg-blue-100"
+                            />
+                        </div>
+                        <p className="mt-1 text-sm text-gray-500">Upload an image to display at the top of the email (optional).</p>
+                    </div>
+
                 </div>
                 <footer className="p-4 bg-gray-50 border-t flex justify-end gap-3">
-                    <button onClick={() => setIsEditModalOpen(false)} className="btn-secondary" disabled={savingTemplate}>Cancel</button>
-                    <button onClick={handleSaveTemplate} className="btn-primary" disabled={savingTemplate}>
-                        {savingTemplate ? 'Saving...' : 'Save Changes'}
+                    <button onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100" disabled={savingTemplate}>Cancel</button>
+                    <button onClick={handleSaveTemplate} className="px-4 py-2 text-sm font-semibold rounded-md bg-blue-600 text-white hover:bg-blue-700" disabled={savingTemplate}>
+                        <Save size={16} className="inline-block mr-2" /> {savingTemplate ? 'Saving...' : 'Save Changes'}
                     </button>
                 </footer>
             </Modal>

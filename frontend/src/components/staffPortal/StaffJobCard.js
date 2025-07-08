@@ -1,130 +1,208 @@
-// ServiceOS/frontend/src/components/staffPortal/StaffJobCard.js
+// src/components/staffPortal/StaffJobCard.jsx
 
-import React, { useState } from 'react';
-import { MapPin, Clock as ClockIcon, CheckCircle2, XCircle, ChevronRight, Gps, Loader as LucideLoader } from 'lucide-react';
-import { getCurrentPosition } from '../../utils/helpers'; // Assuming this helper exists for geolocation
-import api from '../../utils/api'; // Your API utility
+import React, { useState, useCallback } from 'react';
+import { MapPin, Clock, CheckCircle2, XCircle, ChevronRight, Image, Box, ListChecks, Loader as LoaderIcon } from 'lucide-react';
+import api from '../../utils/api';
+import { format } from 'date-fns';
+import JobDetailsModal from './JobDetailsModal';
+import StockReturnModal from './StockReturnModal';
+import { getCurrentPosition } from '../../utils/helpers';
 
 const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
-    const [actionLoading, setActionLoading] = useState(null); // To track loading for specific actions on this card
+    const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const [isStockReturnModalOpen, setIsStockReturnModalOpen] = useState(false);
+    const [actionLoading, setActionLoading] = useState(null);
+    const [stockReturnNewStatus, setStockReturnNewStatus] = useState('');
 
-    // Helper to determine if the job is assigned to the current user (if needed for more complex roles)
-    // const isAssignedToMe = user.staff?._id && job.assignedStaff.includes(user.staff._id);
-
-    // --- Job Action Handlers (Clock In/Out, Complete) ---
-    const handleClockIn = async () => {
-        setActionLoading('clockIn');
-        onActionError(null); // Clear any previous errors from parent
-
+    // Helper to format time nicely
+    const formatTime = (timeString) => {
+        if (!timeString) return 'N/A';
         try {
-            const location = await getCurrentPosition(); // Get current geolocation
-            const res = await api.put(`/jobs/${job._id}`, {
-                clockIn: new Date(), // Send current timestamp
-                clockInLocation: { latitude: location.latitude, longitude: location.longitude },
-                status: 'In Progress' // Automatically set status to In Progress
-            });
-            alert('Clocked in successfully!'); // Consider a toast notification
-            onJobUpdated(res.data.job); // Notify parent to update this specific job
-        } catch (err) {
-            console.error("Error clocking in:", err);
-            onActionError(err.message || "Failed to clock in."); // Pass error to parent
-        } finally {
-            setActionLoading(null);
+            const [hours, minutes] = timeString.split(':').map(Number);
+            const date = new Date();
+            date.setHours(hours, minutes, 0, 0);
+            return format(date, 'hh:mm a');
+        } catch (e) {
+            console.error("Error formatting time:", timeString, e);
+            return timeString;
         }
     };
 
-    const handleClockOut = async () => {
+    // --- Job Action Handlers ---
+
+    const handleClockIn = useCallback(async () => {
+        setActionLoading('clockIn');
+        onActionError(null);
+        try {
+            const res = await api.put(`/jobs/${job._id}/clock-in`);
+            onJobUpdated(res.data.job);
+            alert('Clocked in successfully!');
+        } catch (err) {
+            console.error("Error clocking in:", err);
+            onActionError(err.response?.data?.message || 'Failed to clock in.');
+        } finally {
+            setActionLoading(null);
+        }
+    }, [job._id, onJobUpdated, onActionError]);
+
+    const handleClockOut = useCallback(async () => {
         setActionLoading('clockOut');
         onActionError(null);
         try {
-            const location = await getCurrentPosition(); // Get current geolocation
-            const res = await api.put(`/jobs/${job._id}`, {
-                clockOut: new Date(), // Send current timestamp
-                clockOutLocation: { latitude: location.latitude, longitude: location.longitude },
-                // Status not changed automatically on clock-out here; depends on workflow
-                // Could remain 'In Progress' until explicitly marked 'Completed'
-            });
-            alert('Clocked out successfully!');
+            const res = await api.put(`/jobs/${job._id}/clock-out`);
             onJobUpdated(res.data.job);
+            alert('Clocked out successfully!');
         } catch (err) {
             console.error("Error clocking out:", err);
-            onActionError(err.message || "Failed to clock out.");
+            onActionError(err.response?.data?.message || 'Failed to clock out.');
         } finally {
             setActionLoading(null);
         }
-    };
+    }, [job._id, onJobUpdated, onActionError]);
 
-    const handleCompleteJob = async () => {
+    // FIX: Moved handleReturnStockAndComplete definition BEFORE handleCompleteJobClick
+    const handleReturnStockAndComplete = useCallback(async (jobToUpdate, returnedStockData, statusToApply) => {
         setActionLoading('complete');
         onActionError(null);
+        setIsStockReturnModalOpen(false); // Close the modal
+
         try {
-            const res = await api.put(`/jobs/${job._id}`, { status: 'Completed' }); // Update status to Completed
-            alert('Job marked as completed!');
+            const res = await api.post(`/jobs/${jobToUpdate._id}/return-stock`, {
+                returnedStockItems: Object.entries(returnedStockData).map(([stockId, quantity]) => ({ stockId, quantity })),
+                newStatus: statusToApply,
+            });
             onJobUpdated(res.data.job);
+            alert(`Job marked as ${statusToApply} and stock updated!`);
         } catch (err) {
-            console.error("Error completing job:", err);
-            onActionError(err.response?.data?.message || "Failed to mark job as complete.");
+            console.error("Error completing job or returning stock:", err);
+            onActionError(err.response?.data?.message || 'Failed to complete job or return stock.');
         } finally {
             setActionLoading(null);
         }
-    };
+    }, [onJobUpdated, onActionError]);
+
+    // handleCompleteJobClick now uses handleReturnStockAndComplete after its definition
+    const handleCompleteJobClick = useCallback((statusAfterReturn = 'Completed') => {
+        if (job.usedStock && job.usedStock.length > 0) {
+            setStockReturnNewStatus(statusAfterReturn);
+            setIsStockReturnModalOpen(true);
+        } else {
+            handleReturnStockAndComplete(job, {}, statusAfterReturn);
+        }
+    }, [job, handleReturnStockAndComplete]); // Dependency array is correct
+
+    // Determine button states based on job properties
+    const isClockedIn = !!job.clockInTime;
+    const isClockedOut = !!job.clockOutTime;
+    const isCompleted = job.status === 'Completed';
+    const isInProgress = job.status === 'In Progress';
+    const isPendingCompletion = job.status === 'Pending Completion';
 
     return (
-        <div key={job._id} className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm">
-            <p className="font-semibold text-lg text-gray-900">{job.serviceType}</p>
-            <p className="text-sm text-gray-700"><ClockIcon size={14} className="inline mr-1" />
-                {new Date(job.date).toLocaleDateString()} @ {job.time} (Duration: {job.duration} mins)
+        <div className="bg-white p-5 rounded-lg shadow-md border border-gray-200">
+            <h4 className="text-xl font-bold text-gray-900 mb-2">{job.serviceType}</h4>
+            <p className="text-sm text-gray-600 mb-4">
+                {format(new Date(job.date), 'dd/MM/yyyy')} @ {formatTime(job.time)} (Duration: {job.duration || 'N/A'} mins)
             </p>
-            <p className="text-sm text-gray-700 flex items-center">
-                <MapPin size={14} className="inline mr-1" />
-                {job.address?.street}, {job.address?.city}, {job.address?.postcode}
-            </p>
-            <p className="text-sm text-gray-600 mb-2">Customer: {job.customer?.contactPersonName}</p>
-            <p className={`text-sm font-medium ${job.status === 'Completed' ? 'text-green-600' : job.status === 'In Progress' ? 'text-yellow-600' : 'text-blue-600'}`}>
-                Status: {job.status}
-            </p>
+            <div className="flex items-center text-gray-700 mb-2">
+                <MapPin size={18} className="mr-2 text-blue-500" />
+                <span>{job.address.street}, {job.address.city}</span>
+            </div>
+            <div className="flex items-center text-gray-700 mb-4">
+                <ChevronRight size={18} className="mr-2 text-purple-500" />
+                <span>Customer: {job.customer?.contactPersonName || 'N/A'}</span>
+            </div>
 
-            <div className="mt-3 flex flex-wrap gap-2">
-                {/* Clock In button */}
-                {!job.clockIn && job.status === 'Booked' && (
+            {/* Job Status Badge */}
+            <span className={`px-3 py-1 rounded-full text-sm font-semibold mb-4 inline-block
+                ${isCompleted ? 'bg-green-100 text-green-800' :
+                  isInProgress ? 'bg-yellow-100 text-yellow-800' :
+                  isPendingCompletion ? 'bg-orange-100 text-orange-800' :
+                  'bg-blue-100 text-blue-800'}`}>
+                Status: {job.status}
+            </span>
+
+            {/* Clock In/Out Times Display */}
+            {job.clockInTime && (
+                <p className="text-sm text-gray-600 mt-2">
+                    <Clock size={16} className="inline-block mr-1" /> Clocked In: {format(new Date(job.clockInTime), 'hh:mm a (dd/MM)')}
+                </p>
+            )}
+            {job.clockOutTime && (
+                <p className="text-sm text-gray-600">
+                    <Clock size={16} className="inline-block mr-1" /> Clocked Out: {format(new Date(job.clockOutTime), 'hh:mm a (dd/MM)')}
+                </p>
+            )}
+
+            {/* Action Buttons */}
+            <div className="mt-4 flex flex-wrap gap-3">
+                {/* Clock In Button: Show only if NOT clocked in AND NOT completed */}
+                {!isClockedIn && !isCompleted && (
                     <button
                         onClick={handleClockIn}
-                        className="px-3 py-1 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 flex items-center gap-1"
                         disabled={actionLoading === 'clockIn'}
+                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {actionLoading === 'clockIn' ? <LucideLoader size={16} className="animate-spin" /> : <ClockIcon size={16} />} Clock In
+                        {actionLoading === 'clockIn' ? <LoaderIcon size={18} className="animate-spin mr-2" /> : <Clock size={18} className="mr-2" />}
+                        Clock In
                     </button>
                 )}
-                {/* Clock Out button */}
-                {job.clockIn && !job.clockOut && job.status === 'In Progress' && (
+
+                {/* Clock Out Button: Show only if clocked in AND NOT clocked out AND NOT completed */}
+                {isClockedIn && !isClockedOut && !isCompleted && (
                     <button
                         onClick={handleClockOut}
-                        className="px-3 py-1 text-sm bg-indigo-500 text-white rounded-md hover:bg-indigo-600 flex items-center gap-1"
                         disabled={actionLoading === 'clockOut'}
+                        className="flex items-center px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {actionLoading === 'clockOut' ? <LucideLoader size={16} className="animate-spin" /> : <ClockIcon size={16} />} Clock Out
+                        {actionLoading === 'clockOut' ? <LoaderIcon size={18} className="animate-spin mr-2" /> : <Clock size={18} className="mr-2" />}
+                        Clock Out
                     </button>
                 )}
-                {/* Mark Complete button */}
-                {job.status === 'In Progress' && ( // Can complete if clocked in or not, as long as In Progress
+
+                {/* Details Button: Always show for non-completed jobs */}
+                {!isCompleted && (
                     <button
-                        onClick={handleCompleteJob}
-                        className="px-3 py-1 text-sm bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center gap-1"
-                        disabled={actionLoading === 'complete'}
+                        onClick={() => setIsDetailsModalOpen(true)}
+                        className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors shadow-md"
                     >
-                        {actionLoading === 'complete' ? <LucideLoader size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} Mark Complete
+                        <ListChecks size={18} className="mr-2" /> Details
                     </button>
                 )}
-                {/* Optional: Job Details Button */}
-                <button
-                    // onClick={() => handleViewJobDetails(job._id)} // You would create this handler
-                    className="px-3 py-1 text-sm bg-gray-500 text-white rounded-md hover:bg-gray-600 flex items-center gap-1"
-                >
-                    <ChevronRight size={16} /> Details
-                </button>
+                
+                {/* Complete Job Button: Show only if clocked out AND NOT completed */}
+                {isClockedOut && !isCompleted && (
+                    <button
+                        onClick={() => handleCompleteJobClick()}
+                        disabled={actionLoading === 'complete'}
+                        className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {actionLoading === 'complete' ? <LoaderIcon size={18} className="animate-spin mr-2" /> : <CheckCircle2 size={18} className="mr-2" />}
+                        Complete Job
+                    </button>
+                )}
             </div>
+
+            {/* Modals */}
+            <JobDetailsModal
+                isOpen={isDetailsModalOpen}
+                onClose={() => setIsDetailsModalOpen(false)}
+                job={job}
+                onJobUpdated={onJobUpdated}
+                onActionError={onActionError}
+            />
+
+            <StockReturnModal
+                isOpen={isStockReturnModalOpen}
+                onClose={() => setIsStockReturnModalOpen(false)}
+                job={job}
+                onReturn={handleReturnStockAndComplete}
+                newStatus={stockReturnNewStatus}
+            />
         </div>
     );
 };
 
 export default StaffJobCard;
+
+

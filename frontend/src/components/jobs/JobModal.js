@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+// Adjusted import paths for components in 'common' folder
 import Modal from '../common/Modal';
 import ModernInput from '../common/ModernInput';
 import ModernSelect from '../common/ModernSelect';
-import api from '../../utils/api';
 import AddressInput from '../common/AddressInput';
-import { useMapsApi } from '../../App';
-import { isSameDay } from '../../utils/helpers'; // Ensure isSameDay is imported
-import { PlusIcon, MinusCircleIcon, XCircleIcon } from '@heroicons/react/20/solid'; // For add/remove stock buttons
+
+import api from '../../utils/api'; // Path remains the same
+import { useMapsApi } from '../../App'; // Path remains the same
+import { isSameDay } from '../../utils/helpers'; // Path remains the same
+import { PlusIcon, MinusCircleIcon, XCircleIcon } from '@heroicons/react/20/solid'; // Path remains the same
 
 const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], staff = [] }) => {
     const [formData, setFormData] = useState({
@@ -14,16 +16,17 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
         time: '', duration: 60, assignedStaff: [], status: 'Booked',
         address: {}, notes: '', endDate: '',
         recurring: { pattern: 'none', endDate: '' }, createdBy: null,
-        usedStockItems: [], // NEW: Initialize usedStockItems
+        usedStockItems: [],
+        price: 0, // Initialized to 0
     });
-    const [saving, setSaving] = useState(false); // This is the loading state for form submission
+    const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState(null);
     const [availabilityError, setAvailabilityError] = useState(null);
     const [successMessage, setSuccessMessage] = useState(null);
     const [selectedCustomerDetails, setSelectedCustomerDetails] = useState(null);
-    const [availableStock, setAvailableStock] = useState([]); // NEW: State for available stock
-    const [selectedStockItemId, setSelectedStockItemId] = useState(''); // NEW: For stock dropdown
-    const [stockQuantityToAdd, setStockQuantityToAdd] = useState(1); // NEW: For quantity input
+    const [availableStock, setAvailableStock] = useState([]);
+    const [selectedStockItemId, setSelectedStockItemId] = useState('');
+    const [stockQuantityToAdd, setStockQuantityToAdd] = useState(1);
 
     const { isMapsLoaded, isMapsLoadError } = useMapsApi();
 
@@ -49,13 +52,12 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
         return (staff || []).filter(s => assignedIds.has(s._id));
     }, [staff, formData.assignedStaff]);
 
-    // NEW: Memoized options for available stock items, excluding those already added to the job
     const stockOptions = useMemo(() => {
         const addedStockIds = new Set(formData.usedStockItems.map(item => item.stockItem));
         return [
             { value: '', label: 'Select Stock Item' },
             ...(availableStock || [])
-                .filter(item => !addedStockIds.has(item._id)) // Filter out already added items
+                .filter(item => !addedStockIds.has(item._id))
                 .map(item => ({
                     value: item._id,
                     label: `${item.name} (Available: ${item.stockQuantity})`
@@ -100,20 +102,20 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
                 recurring: { pattern: pattern, endDate: recurringEndDate },
                 createdBy: jobData?.createdBy || null,
                 usedStockItems: jobData?.usedStockItems?.map(item => ({
-                    stockItem: item.stockItem?._id || item.stockItem, // Ensure ID is used
-                    name: item.stockItem?.name, // Store name for display
-                    unit: item.stockItem?.unit, // Store unit for display
+                    stockItem: item.stockItem?._id || item.stockItem,
+                    name: item.stockItem?.name,
+                    unit: item.stockItem?.unit,
                     quantityUsed: item.quantityUsed
-                })) || [], // NEW: Populate usedStockItems
+                })) || [],
+                price: jobData?.price ?? 0, // Use nullish coalescing operator (??) for price to handle 0 correctly
             });
             setFormError(null);
             setAvailabilityError(null);
             setSuccessMessage(null);
-            fetchAvailableStock(); // NEW: Fetch available stock when modal opens
+            fetchAvailableStock();
         }
-    }, [isOpen, jobData, customers]); // Removed isSameDay from dependencies to prevent potential re-render loops
+    }, [isOpen, jobData, customers]);
 
-    // NEW: Fetch available stock items
     const fetchAvailableStock = async () => {
         try {
             const res = await api.get('/stock');
@@ -126,8 +128,13 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
 
     const handleChange = (e) => {
         const { name, value, type } = e.target;
-        // Handle number type conversion carefully
-        const newValue = (type === 'number' && value !== '') ? parseFloat(value) : value;
+        // Ensure numbers are parsed correctly. If a number input is empty, default to 0.
+        let newValue;
+        if (type === 'number') {
+            newValue = value === '' ? 0 : parseFloat(value);
+        } else {
+            newValue = value;
+        }
 
         if (name === 'pattern' || name === 'recurringEndDate') {
             const fieldName = name === 'recurringEndDate' ? 'endDate' : name;
@@ -144,6 +151,8 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
             const selectedCust = customers.find(c => c._id === customerId);
             if (selectedCust) {
                 setSelectedCustomerDetails(selectedCust);
+                // When customer changes, update address. Price auto-population based on service address
+                // would go here if implemented. For now, it's a manual input.
                 setFormData(prev => ({ ...prev, address: selectedCust.address || {} }));
             }
         } else {
@@ -152,13 +161,21 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
         }
     };
 
+    // FIX: Ensure handleAddressChange receives and sets an object, not a string
     const handleAddressChange = useCallback((newAddressObject) => {
-        setFormData(prev => ({ ...prev, address: newAddressObject }));
+        // The AddressInput component should return an object {street, city, etc.}
+        // Ensure that newAddressObject is indeed an object here.
+        if (typeof newAddressObject === 'object' && newAddressObject !== null) {
+            setFormData(prev => ({ ...prev, address: newAddressObject }));
+        } else {
+            // Fallback or error handling if AddressInput sends something unexpected
+            console.error("AddressInput did not return an object:", newAddressObject);
+            setFormData(prev => ({ ...prev, address: {} })); // Reset to empty object
+        }
     }, []);
 
-    // NEW: Handle adding a stock item to the job
     const handleAddStockItem = () => {
-        setFormError(null); // Clear previous errors
+        setFormError(null);
         if (!selectedStockItemId || stockQuantityToAdd <= 0) {
             setFormError('Please select a stock item and enter a positive quantity.');
             return;
@@ -170,24 +187,19 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
             return;
         }
 
-        // Check if item is already added to job
         const existingJobItemIndex = formData.usedStockItems.findIndex(item => item.stockItem === selectedStockItemId);
 
         let newUsedStockItems;
         if (existingJobItemIndex !== -1) {
-            // If already added, update quantity
             const existingJobItem = formData.usedStockItems[existingJobItemIndex];
             const newQuantity = existingJobItem.quantityUsed + stockQuantityToAdd;
 
-            // Calculate the total quantity of this stock item that would be allocated to the job
-            // including its original amount (if editing) and new additions.
-            // This is compared against the actual stock available in inventory.
             const originalQuantityOnJob = jobData?.usedStockItems?.find(i => i.stockItem?._id === selectedStockItemId)?.quantityUsed || 0;
-            const totalAvailableInInventory = selectedItemDetails.stockQuantity + originalQuantityOnJob; // Sum of current physical stock + what was already allocated to this job
+            const totalAvailableInInventory = selectedItemDetails.stockQuantity + originalQuantityOnJob;
 
             if (newQuantity > totalAvailableInInventory) {
-                 setFormError(`Cannot add ${stockQuantityToAdd} more. Total available for ${selectedItemDetails.name}: ${totalAvailableInInventory - existingJobItem.quantityUsed}.`);
-                 return;
+                setFormError(`Cannot add ${stockQuantityToAdd} more. Total available for ${selectedItemDetails.name}: ${totalAvailableInInventory - existingJobItem.quantityUsed}.`);
+                return;
             }
             
             newUsedStockItems = formData.usedStockItems.map((item, index) =>
@@ -196,7 +208,6 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
                     : item
             );
         } else {
-            // Add new item
             if (stockQuantityToAdd > selectedItemDetails.stockQuantity) {
                 setFormError(`Insufficient stock for ${selectedItemDetails.name}. Available: ${selectedItemDetails.stockQuantity}, Requested: ${stockQuantityToAdd}.`);
                 return;
@@ -205,18 +216,17 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
                 ...formData.usedStockItems,
                 {
                     stockItem: selectedStockItemId,
-                    name: selectedItemDetails.name, // Store name for display
-                    unit: selectedItemDetails.unit, // Store unit for display
+                    name: selectedItemDetails.name,
+                    unit: selectedItemDetails.unit,
                     quantityUsed: stockQuantityToAdd
                 }
             ];
         }
         setFormData(prev => ({ ...prev, usedStockItems: newUsedStockItems }));
-        setSelectedStockItemId(''); // Reset dropdown
-        setStockQuantityToAdd(1); // Reset quantity
+        setSelectedStockItemId('');
+        setStockQuantityToAdd(1);
     };
 
-    // NEW: Handle removing a stock item from the job
     const handleRemoveStockItem = (stockItemIdToRemove) => {
         setFormData(prev => ({
             ...prev,
@@ -236,13 +246,29 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
             return;
         }
 
-        if (!formData.customer || !formData.serviceType || !formData.date || !formData.time || !formData.duration) {
-            setFormError('Please fill in all required fields: Customer, Service Type, Date, Time, Duration.');
+        // Validate required fields including price
+        // Ensure price is a number and not null/undefined
+        if (!formData.customer || !formData.serviceType || !formData.date || !formData.time || !formData.duration || typeof formData.price !== 'number') {
+            setFormError('Please fill in all required fields: Customer, Service Type, Date, Time, Duration, and a valid Price.');
+            setSaving(false);
+            return;
+        }
+        // Validate address object (check if it has at least one meaningful field)
+        const isAddressValid = formData.address && typeof formData.address === 'object' && (
+            formData.address.street || formData.address.city || formData.address.postcode || formData.address.country
+        );
+        if (!isAddressValid) {
+            setFormError('Please provide a valid job address (street, city, postcode, or country).');
             setSaving(false);
             return;
         }
 
+
         const dataToSend = { ...formData };
+        // FIX: Rename assignedStaff to staff for backend
+        dataToSend.staff = dataToSend.assignedStaff;
+        delete dataToSend.assignedStaff; // Remove the old field
+
         if (dataToSend.recurring.pattern === 'none') {
             delete dataToSend.recurring;
             if (!dataToSend.endDate || isSameDay(new Date(dataToSend.date), new Date(dataToSend.endDate))) {
@@ -250,11 +276,12 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
             }
         } else {
             dataToSend.endDate = dataToSend.recurring.endDate;
-            dataToSend.recurrence = dataToSend.recurring.pattern; // Flatten for backend model
+            dataToSend.recurrence = dataToSend.recurring.pattern;
             delete dataToSend.recurring;
         }
         
         try {
+            console.log('Job data being sent (frontend):', dataToSend); // DEBUG LOG
             let res;
             if (jobData?._id) {
                 res = await api.put(`/jobs/${jobData._id}`, dataToSend);
@@ -307,6 +334,17 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
                         <ModernInput label="Date" name="date" type="date" value={formData.date} onChange={handleChange} required />
                         <ModernInput label="Time" name="time" type="time" value={formData.time} onChange={handleChange} required />
                         <ModernInput label="Duration (minutes)" name="duration" type="number" value={formData.duration} onChange={handleChange} required min="5" step="5" />
+                        {/* Price input field */}
+                        <ModernInput 
+                            label="Price" 
+                            name="price" 
+                            type="number" 
+                            value={String(formData.price)} 
+                            onChange={handleChange} 
+                            required 
+                            min="0" 
+                            step="0.01" 
+                        />
                     </div>
                     <ModernSelect label="Job Recurrence" name="pattern" value={formData.recurring.pattern} onChange={handleChange} options={recurrenceOptions} />
                     {formData.recurring.pattern !== 'none' && (
@@ -347,7 +385,7 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
                         </div>
                     </div>
 
-                    {/* NEW: Stock Items Section */}
+                    {/* Stock Items Section */}
                     <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
                         <label className="block text-sm font-medium text-gray-700 mb-2">Stock Items Used</label>
                         <div className="flex items-end space-x-2 mb-4">
@@ -397,7 +435,6 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
                             <p className="text-gray-500 text-sm mt-2">No stock items available. Add some in the Stock section.</p>
                         )}
                     </div>
-                    {/* END NEW: Stock Items Section */}
 
                     <ModernSelect label="Job Status" name="status" value={formData.status} onChange={handleChange} options={jobStatusOptions} required />
                     <AddressInput label="Job Address" address={formData.address} onChange={handleAddressChange} fieldName="jobAddress" isMapsLoaded={isMapsLoaded} isMapsLoadError={isMapsLoadError} />

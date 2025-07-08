@@ -31,15 +31,17 @@ app.use((req, res, next) => {
 });
 // --- END GLOBAL DEBUG LOG ---
 
+// --- IMPORTANT: Place CORS and body-parsing middleware BEFORE routes ---
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-app.use(express.json());
+app.use(express.json()); // Parses incoming JSON payloads
+app.use(express.urlencoded({ extended: false })); // Parses URL-encoded data (e.g., from HTML forms)
 
-// Import Routes
+// Import Routes (MUST come AFTER body-parsing middleware)
 const authRoutes = require('./routes/authRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const leadRoutes = require('./routes/leadRoutes');
@@ -51,7 +53,7 @@ const staffRoutes = require('./routes/staffRoutes');
 const jobRoutes = require('./routes/jobRoutes');
 const stockRoutes = require('./routes/stockRoutes');
 const emailTemplateRoutes = require('./routes/emailTemplateRoutes');
-const absenceRoutes = require('./routes/absenceRoutes'); // <--- ABSENCE ROUTES IMPORTED
+const absenceRoutes = require('./routes/absenceRoutes');
 
 // Make the 'uploads' folder static (where uploaded images will be stored)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -75,7 +77,7 @@ app.use('/api/absences', (req, res, next) => {
     next();
 });
 
-app.use('/api/absences', absenceRoutes); // <--- ABSENCE ROUTES MOUNTED
+app.use('/api/absences', absenceRoutes);
 
 app.use('/api/public/forms', publicRoutes);
 

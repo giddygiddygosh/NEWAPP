@@ -1,160 +1,113 @@
-// backend/controllers/settingsController.js
+// backend/controllers/settingController.js
 
-const CompanySetting = require('../models/CompanySetting');
-const Company = require('../models/Company'); // Ensure Company model is imported for population
-const mongoose = require('mongoose');
+const asyncHandler = require('express-async-handler');
+const CompanySetting = require('../models/CompanySetting'); // Assuming your CompanySetting model is here
+const Company = require('../models/Company'); // Assuming you might need Company for getting company name
 
 /**
- * @desc Get company settings
+ * @desc Get company settings for the authenticated company
  * @route GET /api/settings
+ * @access Private (Admin, Manager, Staff)
+ */
+const getCompanySettings = asyncHandler(async (req, res) => {
+    // req.user.company should be available from your protect middleware
+    const companyId = req.user.company;
+
+    const settings = await CompanySetting.findOne({ company: companyId });
+
+    if (!settings) {
+        // If no settings exist for the company, you might want to create default ones
+        // or return a 404/empty response depending on your app's logic.
+        // For now, let's return a default or 404.
+        res.status(404);
+        throw new Error('Company settings not found.');
+    }
+
+    res.status(200).json(settings);
+});
+
+/**
+ * @desc Update company settings for the authenticated company
+ * @route PUT /api/settings
  * @access Private (Admin, Manager)
  */
-exports.getCompanySettings = async (req, res) => {
-    try {
-        const companyId = req.user.company;
+const updateCompanySettings = asyncHandler(async (req, res) => {
+    const companyId = req.user.company;
+    const {
+        companyLogoUrl,
+        defaultFormName,
+        backgroundColor,
+        primaryColor,
+        borderColor,
+        labelColor,
+        inputButtonBorderRadius,
+        defaultCurrency,
+        emailAutomation // This will contain all email settings (welcome_email, staff_welcome_email etc.)
+    } = req.body;
 
-        if (!companyId) {
-            console.error('[SettingsController] Attempted to get settings without companyId in req.user.');
-            return res.status(400).json({ message: 'Company ID not found in user session. Please re-login.' });
-        }
+    let settings = await CompanySetting.findOne({ company: companyId });
 
-        let settings = await CompanySetting.findOne({ company: companyId })
-            // --- FIX: Populate the 'company' field to get its name and appId ---
-            .populate('company', 'name appId') // Specify fields to retrieve from the Company model
-            .lean(); // Use .lean() for faster queries if you don't need Mongoose document methods
-
-        if (!settings) {
-            // If settings don't exist, create default ones
-            console.log(`[SettingsController] No existing settings found for company ${companyId}. Creating defaults.`);
-            settings = await CompanySetting.create({ company: companyId });
-            // After creating, we need to re-fetch/populate it to send the full company object back
-            settings = await CompanySetting.findById(settings._id)
-                .populate('company', 'name appId')
-                .lean();
-            console.log(`[SettingsController] Created and fetched default settings for company: ${companyId}`);
-        }
-
-        // Add a debug log to see what's being sent to the frontend
-        console.log('[SettingsController] Sending settings to frontend:', settings);
-
-        res.status(200).json(settings);
-    } catch (error) {
-        console.error('Error fetching company settings:', error);
-        res.status(500).json({ message: 'Server Error fetching settings', error: error.message });
-    }
-};
-
-/**
- * @desc Update company settings
- * @route PUT /api/settings
- * @access Private (Admin)
- */
-exports.updateCompanySettings = async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-    try {
-        const companyId = req.user.company;
-        const updates = req.body;
-
-        let settings = await CompanySetting.findOne({ company: companyId }).session(session);
-
-        if (!settings) {
-            await session.abortTransaction();
-            session.endSession();
-            return res.status(404).json({ message: 'Settings not found for this company.' });
-        }
-
-        // Handle updates for nested objects like address or defaultCurrency
-        // Ensure that if 'address' is part of updates, it's correctly merged.
-        // The frontend sends `address` as a flat object, assuming it maps to CompanySetting.address
-        // If address is part of the Company model, this needs to be split and handled in Company update.
-        // Based on SettingsPage.jsx, `address` is sent as `localSettings.companyAddress` to /settings PUT,
-        // which implies it's on CompanySetting.
-        if (updates.address && typeof updates.address === 'object') {
-            settings.address = {
-                ...settings.address, // Merge with existing address to keep non-updated fields
-                ...updates.address
-            };
-            delete updates.address; // Remove from general updates to avoid overwriting the merged object
-        }
-
-        if (updates.defaultCurrency && typeof updates.defaultCurrency === 'object') {
-            settings.defaultCurrency = {
-                ...settings.defaultCurrency,
-                ...updates.defaultCurrency,
-            };
-            delete updates.defaultCurrency; // Remove from general updates
-        }
-
-        // Handle company-level updates that might be sent in the same payload
-        // The frontend sends `name`, `phone`, `email`, `website`, `taxId` for the Company model
-        // These need to be updated on the Company model, not CompanySetting.
-        const companyUpdates = {};
-        const companyFields = ['name', 'phone', 'email', 'website', 'taxId'];
-        companyFields.forEach(field => {
-            if (updates[field] !== undefined) {
-                companyUpdates[field] = updates[field];
-                delete updates[field]; // Remove from settings updates
-            }
+    if (!settings) {
+        // If settings don't exist, create them
+        settings = await CompanySetting.create({
+            company: companyId,
+            companyLogoUrl,
+            defaultFormName,
+            backgroundColor,
+            primaryColor,
+            borderColor,
+            labelColor,
+            inputButtonBorderRadius,
+            defaultCurrency,
+            emailAutomation
         });
-
-        // Apply remaining updates (CompanySetting fields)
-        for (const key of Object.keys(updates)) {
-            settings[key] = updates[key];
-        }
-        settings.updatedAt = Date.now();
-
-        // Save CompanySetting
-        await settings.save({ session });
-
-        // Update Company model if there are company-specific updates
-        let company;
-        if (Object.keys(companyUpdates).length > 0) {
-            company = await Company.findById(companyId).session(session);
-            if (company) {
-                // Ensure the appId is not updated here if it's derived from email domain and meant to be immutable
-                if (companyUpdates.name !== undefined) company.name = companyUpdates.name;
-                if (companyUpdates.phone !== undefined) company.phone = companyUpdates.phone;
-                if (companyUpdates.email !== undefined) company.email = companyUpdates.email;
-                if (companyUpdates.website !== undefined) company.website = companyUpdates.website;
-                if (companyUpdates.taxId !== undefined) company.taxId = companyUpdates.taxId;
-                await company.save({ session });
-            } else {
-                console.warn(`[SettingsController] Company not found for ID ${companyId} during update.`);
-            }
-        }
-
-        await session.commitTransaction();
-        session.endSession();
-
-        // Re-fetch settings with populated company data to send back a consistent response
-        const updatedSettings = await CompanySetting.findById(settings._id)
-            .populate('company', 'name appId')
-            .lean();
-
-        res.status(200).json({ message: 'Settings updated successfully', settings: updatedSettings });
-
-    } catch (error) {
-        await session.abortTransaction();
-        session.endSession();
-        console.error('Error updating company settings:', error);
-        if (error.name === 'ValidationError') {
-            const errors = {};
-            for (let field in error.errors) {
-                errors[field] = error.errors[field].message;
-            }
-            return res.status(400).json({ message: `Validation failed: ${Object.values(errors).join(', ')}`, errors: errors });
-        }
-        if (error.code === 11000) {
-             // Handle duplicate key error for company name if it has a unique index
-            return res.status(400).json({ message: 'A company with this name already exists.' });
-        }
-        res.status(500).json({ message: 'Failed to update settings.', error: error.message });
+        return res.status(201).json(settings);
     }
-};
 
-// NEW: Export all functions for use in routes
+    // Update existing settings
+    settings.companyLogoUrl = companyLogoUrl ?? settings.companyLogoUrl;
+    settings.defaultFormName = defaultFormName ?? settings.defaultFormName;
+    settings.backgroundColor = backgroundColor ?? settings.backgroundColor;
+    settings.primaryColor = primaryColor ?? settings.primaryColor;
+    settings.borderColor = borderColor ?? settings.borderColor;
+    settings.labelColor = labelColor ?? settings.labelColor;
+    settings.inputButtonBorderRadius = inputButtonBorderRadius ?? settings.inputButtonBorderRadius;
+    
+    // Update nested currency object
+    if (defaultCurrency) {
+        settings.defaultCurrency.code = defaultCurrency.code ?? settings.defaultCurrency.code;
+        settings.defaultCurrency.symbol = defaultCurrency.symbol ?? settings.defaultCurrency.symbol;
+        settings.defaultCurrency.decimalPlaces = defaultCurrency.decimalPlaces ?? settings.defaultCurrency.decimalPlaces;
+        settings.defaultCurrency.thousandSeparator = defaultCurrency.thousandSeparator ?? settings.defaultCurrency.thousandSeparator;
+        settings.defaultCurrency.decimalSeparator = defaultCurrency.decimalSeparator ?? settings.defaultCurrency.decimalSeparator;
+        settings.defaultCurrency.formatTemplate = defaultCurrency.formatTemplate ?? settings.defaultCurrency.formatTemplate;
+    }
+
+    // Update nested emailAutomation object
+    if (emailAutomation) {
+        // Iterate over the keys in emailAutomation and update them
+        for (const key in emailAutomation) {
+            if (settings.emailAutomation.hasOwnProperty(key)) {
+                // Ensure nested properties like 'enabled' are updated correctly
+                if (typeof emailAutomation[key] === 'object' && emailAutomation[key] !== null) {
+                    for (const subKey in emailAutomation[key]) {
+                        if (settings.emailAutomation[key].hasOwnProperty(subKey)) {
+                            settings.emailAutomation[key][subKey] = emailAutomation[key][subKey];
+                        }
+                    }
+                } else {
+                    settings.emailAutomation[key] = emailAutomation[key];
+                }
+            }
+        }
+    }
+
+    const updatedSettings = await settings.save();
+    res.status(200).json(updatedSettings);
+});
+
+
 module.exports = {
-    getCompanySettings: exports.getCompanySettings,
-    updateCompanySettings: exports.updateCompanySettings,
+    getCompanySettings,
+    updateCompanySettings,
 };

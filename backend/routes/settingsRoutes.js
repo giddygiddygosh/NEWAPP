@@ -1,13 +1,17 @@
+// backend/routes/settingsRoutes.js
+
 const express = require('express');
 const router = express.Router();
-const { protect, authorize } = require('../middleware/authMiddleware');
-const {
-    getCompanySettings,
-    updateCompanySettings,
-} = require('../controllers/settingsController');
+// FIX: Changed 'settingController' to 'settingsController' to match your actual filename
+const { getCompanySettings, updateCompanySettings } = require('../controllers/settingsController');
+const { protect, authorize } = require('../middleware/authMiddleware'); // Your auth middleware
 
 router.route('/')
-    .get(protect, authorize('admin', 'manager'), getCompanySettings)
-    .put(protect, authorize('admin'), updateCompanySettings);
+    // Allow 'admin', 'manager', AND 'staff' roles to GET (read) company settings
+    .get(protect, authorize(['admin', 'manager', 'staff']), getCompanySettings)
+    // Keep PUT (update) restricted to 'admin' and 'manager'
+    .put(protect, authorize(['admin', 'manager']), updateCompanySettings);
 
 module.exports = router;
+
+

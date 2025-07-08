@@ -4,7 +4,7 @@ const admin = require('firebase-admin');
 const User = require('../models/User');
 const Company = require('../models/Company');
 const generateToken = require('../utils/generateToken');
-const sendEmail = require('../utils/emailService');
+const sendEmail = require('../utils/emailService'); // Assuming this is your base email sender
 
 /**
  * @desc    Register a new company and its first admin user
@@ -21,8 +21,10 @@ const registerWithFirebase = async (req, res) => {
     try {
         const userExists = await User.findOne({ firebaseUid });
         if (userExists) {
-            const token = generateToken(userExists._id, userExists.company, userExists.role);
-            return res.status(200).json({ message: 'User already registered.', user: userExists, token });
+            // If user already exists, populate staff if it's there
+            const userWithStaff = await User.findOne({ firebaseUid }).populate('staff'); // Added populate here for existing users
+            const token = generateToken(userWithStaff._id, userWithStaff.company, userWithStaff.role);
+            return res.status(200).json({ message: 'User already registered.', user: userWithStaff, token });
         }
 
         const emailExists = await User.findOne({ email });
@@ -45,7 +47,8 @@ const registerWithFirebase = async (req, res) => {
         if (newUser) {
             console.log(`[SUCCESS] User registered in DB: ${newUser.email}, Role: ${newUser.role}`);
             const token = generateToken(newUser._id, newUser.company, newUser.role);
-            // ... your email sending logic can go here ...
+            // No staff population needed here as this is for initial admin creation,
+            // and an admin user doesn't necessarily have a 'staff' document linked at this point.
             res.status(201).json({ user: newUser, token });
         } else {
             throw new Error('Failed to create user profile.');
@@ -72,7 +75,10 @@ const firebaseLogin = async (req, res) => {
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         const { uid: firebaseUid, email } = decodedToken;
 
-        const user = await User.findOne({ $or: [{ firebaseUid }, { email }] }).populate('company', 'name appId');
+        // FIX: Add .populate('staff') here to get the full staff document
+        const user = await User.findOne({ $or: [{ firebaseUid }, { email }] })
+                               .populate('company', 'name appId')
+                               .populate('staff'); // <--- ADDED THIS LINE
 
         if (!user) {
             return res.status(404).json({ message: 'User not registered in the database. Please sign up.' });
@@ -85,7 +91,7 @@ const firebaseLogin = async (req, res) => {
 
         const token = generateToken(user._id, user.company?._id, user.role);
 
-        res.json({ user, token });
+        res.json({ user, token }); // The 'user' object sent here will now have 'staff' populated
     } catch (error) {
         console.error('Server Error during Firebase ID Token verification:', error);
         res.status(500).json({ message: 'Authentication failed.' });
@@ -119,7 +125,12 @@ const forgotPassword = async (req, res) => {
  */
 const getMe = async (req, res) => {
     try {
-        const user = await User.findById(req.user._id).select('-password').populate('company');
+        // FIX: Add .populate('staff') here to get the full staff document when fetching own profile
+        const user = await User.findById(req.user._id)
+                               .select('-password')
+                               .populate('company')
+                               .populate('staff'); // <--- ADDED THIS LINE
+
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }

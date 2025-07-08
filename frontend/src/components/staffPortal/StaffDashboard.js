@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext';
 import api from '../../utils/api';
 import Loader from '../common/Loader';
 import { MapPin, Clock, CheckCircle2, XCircle, ChevronRight, Gps } from 'lucide-react'; // Keep icons, some still used directly
-import { getCurrentPosition } from '../../utils/helpers';
 
 // NEW: Import the StaffJobCard component
 import StaffJobCard from './StaffJobCard'; // Assuming StaffJobCard.js is in the same folder
@@ -25,7 +24,7 @@ const StaffDashboard = () => {
         try {
             if (!user?.staff?._id) { 
                 setFetchError("Staff profile not available. Cannot fetch assigned jobs.");
-                setIsLoadingJobs(false);
+                setIsLoadingJobs(false); 
                 return;
             }
             const today = new Date().toISOString().split('T')[0];
@@ -42,7 +41,7 @@ const StaffDashboard = () => {
                 }
             });
             const filteredJobs = res.data.filter(job => job.status !== 'Completed' && job.status !== 'Cancelled')
-                                        .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+                                         .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
             setAssignedJobs(filteredJobs);
             console.log("DEBUG: Fetched Jobs Response Data:", res.data);
             console.log("DEBUG: Filtered and Assigned Jobs:", filteredJobs);
@@ -51,7 +50,7 @@ const StaffDashboard = () => {
             console.error("DEBUG ERROR: Error fetching assigned jobs for Staff Dashboard:", err);
             setFetchError(err.response?.data?.message || "Failed to load your assigned jobs.");
         } finally {
-            setIsLoadingJobs(false);
+            setIsLoadingJobs(false); 
         }
     }, [user]);
 
@@ -61,22 +60,18 @@ const StaffDashboard = () => {
         }
     }, [user, fetchAssignedJobs]);
 
-    // This callback will be passed to each StaffJobCard to update its state or re-fetch
     const handleJobUpdatedInCard = useCallback((updatedJob) => {
         setAssignedJobs(prevJobs => prevJobs.map(job => 
             job._id === updatedJob._id ? updatedJob : job
         ));
-        // If a job is completed, you might want to re-fetch to remove it from "Today/Tomorrow" list
         if (updatedJob.status === 'Completed' || updatedJob.status === 'Cancelled') {
-            fetchAssignedJobs(); // Re-fetch to filter out completed jobs
+            fetchAssignedJobs(); 
         }
     }, [fetchAssignedJobs]);
 
-    // This callback will be passed to each StaffJobCard to display action errors
     const handleJobActionError = useCallback((errorMsg) => {
-        setFetchError(errorMsg); // Display the error at the top of the dashboard
+        setFetchError(errorMsg); 
     }, []);
-
 
     if (!user || user.loading || !user.staff) { 
         return (
@@ -110,13 +105,16 @@ const StaffDashboard = () => {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Feature Card: Assigned Jobs - Now dynamically loads jobs */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 shadow-sm col-span-full"> {/* Span full width for job list */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 shadow-sm col-span-full">
                     <h3 className="text-xl font-semibold text-blue-800 mb-4 flex items-center gap-2">
                         <MapPin size={24} /> Your Assigned Jobs (Today/Tomorrow)
                     </h3>
                     {isLoadingJobs ? (
-                        <p className="text-blue-700 text-center"><Loader className="animate-spin inline-block mr-2" />Loading your jobs...</p>
+                        // FIX: Changed <p> to <div> to resolve DOM nesting warning
+                        <div className="text-blue-700 text-center flex items-center justify-center">
+                            <Loader className="animate-spin inline-block mr-2" />
+                            <span>Loading your jobs...</span>
+                        </div>
                     ) : assignedJobs.length === 0 ? (
                         <p className="text-blue-700 text-center">No jobs assigned for today or tomorrow.</p>
                     ) : (
@@ -125,8 +123,8 @@ const StaffDashboard = () => {
                                 <StaffJobCard
                                     key={job._id}
                                     job={job}
-                                    onJobUpdated={handleJobUpdatedInCard} // Pass callback to update specific job
-                                    onActionError={handleJobActionError} // Pass callback to display errors
+                                    onJobUpdated={handleJobUpdatedInCard} 
+                                    onActionError={handleJobActionError} 
                                 />
                             ))}
                         </div>
@@ -163,3 +161,4 @@ const StaffDashboard = () => {
 };
 
 export default StaffDashboard;
+

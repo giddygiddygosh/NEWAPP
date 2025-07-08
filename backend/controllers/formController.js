@@ -1,22 +1,17 @@
 // backend/controllers/formController.js
 
-const Form = require('../models/Form'); // Assuming you have a Form model
-const Submission = require('../models/Submission'); // Assuming you have a Submission model
-const Customer = require('../models/Customer'); // Assuming you have a Customer model
-const Lead = require('../models/Lead'); // Assuming you have a Lead model
+const Form = require('../models/Form');
+const Submission = require('../models/Submission');
+const Customer = require('../models/Customer');
+const Lead = require('../models/Lead');
 const mongoose = require('mongoose');
 
-/**
- * @desc Create a new form
- * @route POST /api/forms
- * @access Private (Admin)
- */
 exports.createForm = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
         const { name, schema, purpose, companySpecific } = req.body;
-        const companyId = req.user.company; // Company from authenticated user
+        const companyId = req.user.company;
 
         if (!name || !schema || !purpose) {
             await session.abortTransaction();
@@ -24,12 +19,14 @@ exports.createForm = async (req, res) => {
             return res.status(400).json({ message: 'Form name, schema, and purpose are required.' });
         }
 
+        // The issue was with Mongoose interpreting 'schema' as a discriminator type.
+        // By setting type: mongoose.Schema.Types.Mixed in the model, it should fix this.
         const newForm = new Form({
             name,
-            schema,
+            schema, // Pass the schema data directly
             purpose,
             company: companyId,
-            companySpecific: companySpecific !== undefined ? companySpecific : true, // Default to company specific
+            companySpecific: companySpecific !== undefined ? companySpecific : true,
         });
 
         await newForm.save({ session });
@@ -53,18 +50,13 @@ exports.createForm = async (req, res) => {
     }
 };
 
-/**
- * @desc Get all forms for a company
- * @route GET /api/forms
- * @access Private (Admin, Manager)
- */
 exports.getForms = async (req, res) => {
     try {
         const companyId = req.user.company;
         const forms = await Form.find({
             $or: [
                 { company: companyId },
-                { companySpecific: false } // Include global forms if any
+                { companySpecific: false }
             ]
         }).sort({ createdAt: -1 });
         res.status(200).json(forms);
@@ -74,11 +66,6 @@ exports.getForms = async (req, res) => {
     }
 };
 
-/**
- * @desc Get a single form by ID
- * @route GET /api/forms/:id
- * @access Private (Admin, Manager)
- */
 exports.getFormById = async (req, res) => {
     try {
         const formId = req.params.id;
@@ -102,11 +89,6 @@ exports.getFormById = async (req, res) => {
     }
 };
 
-/**
- * @desc Update a form by ID
- * @route PUT /api/forms/:id
- * @access Private (Admin)
- */
 exports.updateForm = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -150,11 +132,6 @@ exports.updateForm = async (req, res) => {
     }
 };
 
-/**
- * @desc Delete a form by ID
- * @route DELETE /api/forms/:id
- * @access Private (Admin)
- */
 exports.deleteForm = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -170,7 +147,6 @@ exports.deleteForm = async (req, res) => {
             return res.status(404).json({ message: 'Form not found or not authorized.' });
         }
 
-        // Also delete any submissions linked to this form
         await Submission.deleteMany({ form: formId }).session(session);
 
         await session.commitTransaction();
@@ -184,4 +160,12 @@ exports.deleteForm = async (req, res) => {
         console.error('Error deleting form:', error);
         res.status(500).json({ message: 'Failed to delete form.', error: error.message });
     }
+};
+
+module.exports = {
+    createForm: exports.createForm,
+    getForms: exports.getForms,
+    getFormById: exports.getFormById,
+    updateForm: exports.updateForm,
+    deleteForm: exports.deleteForm,
 };

@@ -26,7 +26,7 @@ import SpotCheckerPage from './components/dashboard/SpotCheckerPage';
 import RoutePlannerView from './components/route-planner/RoutePlannerView';
 
 // NEW: Import StaffAbsencePage
-import StaffAbsencePage from './components/staff/StaffAbsencePage'; // <--- ADD THIS LINE
+import StaffAbsencePage from './components/staff/StaffAbsencePage';
 
 
 import { DndProvider } from 'react-dnd';
@@ -119,7 +119,8 @@ function AppContent() {
             {showSidebarLayout && (
                 <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} user={user} logout={logout} />
             )}
-            <main className={`flex-1 overflow-auto transition-all duration-300 ease-in-out p-8 ${showSidebarLayout && isSidebarOpen ? 'ml-64' : (showSidebarLayout ? 'ml-20' : 'ml-0')}`}>
+            {/* Removed p-8 from here. Add padding directly to your page components (e.g., in LeadsView.jsx) */}
+            <main className={`flex-1 overflow-auto transition-all duration-300 ease-in-out ${showSidebarLayout && isSidebarOpen ? 'ml-64' : (showSidebarLayout ? 'ml-20' : 'ml-0')}`}>
                 <MapsApiProvider>
                     <Routes>
                         {/* Public Routes */}
@@ -147,10 +148,14 @@ function AppContent() {
 
                         <Route path="/email-templates" element={<PrivateRoute roles={['admin']}><EmailTemplatesView /></PrivateRoute>} />
 
-                        {/* Placeholder Routes */}
+                        {/* Placeholder Routes - REMEMBER TO ADD p-8 (or similar) to these actual components when they are built */}
                         <Route path="/jobs" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><div className="p-8">Job Management Page</div></PrivateRoute>} />
                         <Route path="/invoices" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><div className="p-8">Invoices Page</div></PrivateRoute>} />
                         <Route path="/quotes" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><div className="p-8">Quotes Page</div></PrivateRoute>} />
+                        {/* Payroll and Commission Report are missing in routes but present in sidebar. Ensure you add them */}
+                        <Route path="/payroll" element={<PrivateRoute roles={['admin']}><div className="p-8">Payroll Page</div></PrivateRoute>} />
+                        <Route path="/commission-report" element={<PrivateRoute roles={['admin', 'manager']}><div className="p-8">Commission Report Page</div></PrivateRoute>} />
+
 
                         {/* Default Route */}
                         <Route path="/" element={loading ? <div>Loading...</div> : <Navigate to={user ? getDefaultDashboardPath(user.role) : "/login"} replace />} />

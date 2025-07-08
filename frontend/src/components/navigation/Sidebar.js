@@ -12,12 +12,10 @@ import {
     Bars3Icon, XMarkIcon, ArrowRightOnRectangleIcon,
     EnvelopeIcon, ClipboardDocumentListIcon, BuildingLibraryIcon,
     BuildingOffice2Icon, MegaphoneIcon, ShoppingBagIcon,
-    Package // Import Package icon for Stock
-} from '@heroicons/react/24/outline'; // Assuming Heroicons are your primary icons
+    // Assuming Package icon for Stock might be a typo or not used, keeping it as is from original
+} from '@heroicons/react/24/outline';
 
-// Assuming these icons are used and imported from lucide-react in Sidebar
-import { Mail as MailIconLucide, Search as SearchIconLucide, Route as RouteIconLucide, UserX as UserXIconLucide } from 'lucide-react'; // NEW: Import UserX icon for Staff Absence
-
+import { Mail as MailIconLucide, Search as SearchIconLucide, Route as RouteIconLucide, UserX as UserXIconLucide } from 'lucide-react';
 
 const Sidebar = ({ isOpen, toggleSidebar, user, logout, className }) => {
     const location = useLocation();
@@ -57,8 +55,7 @@ const Sidebar = ({ isOpen, toggleSidebar, user, logout, className }) => {
             isGroup: true,
             children: [
                 { name: 'Staff', path: '/staff', icon: UsersIcon, roles: ['admin', 'manager'] },
-                // NEW: Staff Absence Link
-                { name: 'Staff Absence', path: '/staff-absence', icon: UserXIconLucide, roles: ['admin', 'manager'] }, // Admin/Manager can manage
+                { name: 'Staff Absence', path: '/staff-absence', icon: UserXIconLucide, roles: ['admin', 'manager'] },
                 { name: 'Jobs', path: '/jobs', icon: BriefcaseIcon, roles: ['admin', 'staff', 'manager'] },
                 { name: 'Invoices', path: '/invoices', icon: DocumentTextIcon, roles: ['admin', 'manager', 'staff'] },
                 { name: 'Quotes', path: '/quotes', icon: ClipboardDocumentListIcon, roles: ['admin', 'manager', 'staff'] },
@@ -98,7 +95,7 @@ const Sidebar = ({ isOpen, toggleSidebar, user, logout, className }) => {
         <>
             {/* Mobile sidebar overlay */}
             <div
-                className={`fixed inset-0 bg-gray-600 bg-opacity-75 z-40 md:hidden ${isOpen ? 'block' : 'hidden'}`}
+                className={`fixed inset-0 bg-gray-900 bg-opacity-75 z-40 md:hidden ${isOpen ? 'block' : 'hidden'}`}
                 onClick={toggleSidebar}
             ></div>
 
@@ -110,15 +107,16 @@ const Sidebar = ({ isOpen, toggleSidebar, user, logout, className }) => {
                     transition-all duration-300 ease-in-out
                     ${isOpen ? 'w-64' : 'w-20'} md:flex md:relative md:shrink-0
                     overflow-hidden
+                    shadow-xl border-r border-gray-700
                 `}
             >
                 {/* Sidebar Header/Logo Area */}
                 <div className="flex items-center justify-between h-16 px-4 border-b border-gray-700 flex-shrink-0">
                     {isOpen ? (
-                        <span className="text-xl font-semibold flex-shrink-0">ServiceOS</span>
+                        <span className="text-2xl font-bold text-sky-400 flex-shrink-0">ServiceOS</span>
                     ) : (
                         <div className="flex items-center justify-center w-full py-2">
-                            <BuildingOffice2Icon className="h-8 w-8 text-blue-400" />
+                            <BuildingOffice2Icon className="h-9 w-9 text-sky-400" />
                         </div>
                     )}
                     <button onClick={toggleSidebar} className="md:hidden text-gray-400 hover:text-white focus:outline-none">
@@ -127,14 +125,14 @@ const Sidebar = ({ isOpen, toggleSidebar, user, logout, className }) => {
                 </div>
 
                 {/* Main Navigation Area */}
-                <nav className="flex-1 px-2 py-4 overflow-y-auto custom-scrollbar">
+                <nav className="flex-1 px-3 py-4 overflow-y-auto custom-scrollbar"> {/* Increased px-3 */}
                     <ul className="list-none space-y-1">
                         {navItems.map((item) => {
                             const hasAccess = user && item.roles.includes(user.role);
                             if (!hasAccess) return null;
 
                             const isActive = item.path ? location.pathname === item.path :
-                                             item.isGroup && isPathActiveInGroup(item.children);
+                                            item.isGroup && isPathActiveInGroup(item.children);
 
                             if (item.isGroup) {
                                 const isSubMenuOpen = openSubMenu === item.name || isPathActiveInGroup(item.children);
@@ -145,7 +143,7 @@ const Sidebar = ({ isOpen, toggleSidebar, user, logout, className }) => {
                                             onClick={() => toggleSubMenu(item.name)}
                                             className={`
                                                 flex items-center py-2 rounded-lg transition-colors duration-200 w-full
-                                                ${isActive ? 'bg-indigo-700 text-white shadow-md' : 'hover:bg-gray-700 text-gray-300 hover:text-white'}
+                                                ${isActive ? 'bg-sky-700 text-white shadow-md' : 'hover:bg-gray-700 text-gray-300 hover:text-white'}
                                                 ${isOpen ? 'px-4 justify-between' : 'justify-center'}
                                             `}
                                             data-tip={!isOpen ? item.name : ''}
@@ -162,7 +160,7 @@ const Sidebar = ({ isOpen, toggleSidebar, user, logout, className }) => {
                                         {isSubMenuOpen && (
                                             <ul className={`
                                                 list-none space-y-1
-                                                ${isOpen ? 'ml-4 mt-2 relative' : 'absolute left-full top-0 mt-0 bg-gray-700 rounded-lg shadow-lg w-48 py-2 z-50'}
+                                                ${isOpen ? 'ml-6 mt-2 relative' : 'absolute left-full top-0 mt-0 bg-gray-700 rounded-lg shadow-lg w-48 py-2 z-50'} {/* Increased ml-6 */}
                                                 transition-all duration-300 ease-in-out
                                             `}>
                                                 {item.children.map(child => {
@@ -175,7 +173,7 @@ const Sidebar = ({ isOpen, toggleSidebar, user, logout, className }) => {
                                                                 to={child.path}
                                                                 className={({ isActive: isChildActive }) =>
                                                                     `flex items-center py-2 rounded-lg transition-colors duration-200
-                                                                    ${isChildActive ? 'bg-indigo-600 text-white shadow-sm' : 'hover:bg-gray-600 text-gray-400 hover:text-white'}
+                                                                    ${isChildActive ? 'bg-sky-600 text-white shadow-sm' : 'hover:bg-gray-600 text-gray-400 hover:text-white'}
                                                                     ${isOpen ? 'px-3' : 'px-4'}`
                                                                 }
                                                             >
@@ -196,7 +194,7 @@ const Sidebar = ({ isOpen, toggleSidebar, user, logout, className }) => {
                                             to={item.path}
                                             className={({ isActive }) =>
                                                 `flex items-center py-2 rounded-lg transition-colors duration-200
-                                                ${isActive ? 'bg-indigo-700 text-white shadow-md' : 'hover:bg-gray-700 text-gray-300 hover:text-white'}
+                                                ${isActive ? 'bg-sky-700 text-white shadow-md' : 'hover:bg-gray-700 text-gray-300 hover:text-white'}
                                                 ${isOpen ? 'px-4' : 'justify-center md:tooltip md:tooltip-right'}`
                                             }
                                             data-tip={!isOpen ? item.name : ''}
@@ -212,7 +210,7 @@ const Sidebar = ({ isOpen, toggleSidebar, user, logout, className }) => {
                 </nav>
 
                 {/* Footer/Logout Section */}
-                <div className={`mt-auto pt-4 border-t border-gray-700 ${isOpen ? 'px-2' : 'px-0'} text-center flex-shrink-0`}>
+                <div className={`mt-auto pt-4 border-t border-gray-700 ${isOpen ? 'px-4' : 'px-0'} text-center flex-shrink-0`}> {/* Increased px-4 */}
                     {isOpen && (
                         <>
                             <p className="text-sm text-gray-400 mb-2">Logged in as:</p>
@@ -227,7 +225,7 @@ const Sidebar = ({ isOpen, toggleSidebar, user, logout, className }) => {
                         onClick={logout}
                         className={`
                             w-full flex items-center justify-center py-2 rounded-lg bg-red-600 text-white
-                            hover:bg-red-700 transition-colors duration-200 shadow-md
+                            hover:bg-red-700 transition-colors duration-200 shadow-md mb-4
                             ${isOpen ? 'px-4' : 'px-0 md:tooltip md:tooltip-right'}`
                         }
                         data-tip={!isOpen ? 'Logout' : ''}

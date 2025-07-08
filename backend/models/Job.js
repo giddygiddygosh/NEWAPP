@@ -13,13 +13,11 @@ const JobSchema = new mongoose.Schema({
         ref: 'Customer',
         required: true,
     },
-    // *** CHANGE THIS LINE ***
-    staff: [{ // <-- Changed to an array of objects
+    staff: [{ // Array of ObjectIds for multiple assigned staff
         type: mongoose.Schema.ObjectId,
         ref: 'Staff',
-        required: true, // You might consider if individual staff in the array are required or if the array can be empty
+        required: true,
     }],
-    // ***********************
     serviceType: {
         type: String,
         required: [true, 'Please add a service type'],
@@ -40,7 +38,7 @@ const JobSchema = new mongoose.Schema({
         type: Date,
         required: [true, 'Please add a job date'],
     },
-    time: {
+    time: { // Expected format "HH:MM" e.g., "09:00"
         type: String,
         match: [/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Please use HH:MM format for time'],
     },
@@ -104,9 +102,16 @@ const JobSchema = new mongoose.Schema({
             },
         },
     ],
+    // NEW FIELD: Reference to the Form (task list template) used for this job
+    formTemplate: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'Form',
+        default: null, // Optional, not all jobs might have a template
+    },
+    // Tasks list for the job (populated from formTemplate's schema, or manually added)
     tasks: [
         {
-            taskId: {
+            taskId: { // Unique ID for the task, could be generated or from form template
                 type: String,
                 required: true,
             },

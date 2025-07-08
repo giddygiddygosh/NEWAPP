@@ -8,12 +8,59 @@ const sendTemplatedEmail = require('../utils/emailTriggerService'); // Your temp
 const mongoose = require('mongoose');
 const path = require('path');
 const fs = require('fs');
+const Form = require('../models/Form'); // NEW: Import Form model
 
 // Ensure the uploads directory exists
 const uploadsDir = path.join(__dirname, '../../uploads');
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
+
+/**
+ * Helper function to extract tasks from a form schema.
+ * Assumes tasks are defined as fields with a specific type or mapping.
+ * This needs to match how your form builder defines "tasks".
+ * For simplicity, let's assume tasks are fields with a 'type' of 'checkbox' or 'task'
+ * that have a 'label' which becomes the 'description'.
+ * Or, if your form builder has a dedicated 'task list' component, you'd parse that.
+ *
+ * A more robust solution might involve a specific field property in your form builder schema
+ * like { name: "task1", label: "Inspect wiring", isTask: true, defaultCompleted: false }
+ *
+ * For now, let's assume any field with a 'task' purpose or 'checkbox' type in the schema
+ * can be considered a task. Or, more simply, if the form purpose is 'reminder_task_list',
+ * then all fields in its schema are tasks.
+ */
+const extractTasksFromFormSchema = (formSchema) => {
+    const tasks = [];
+    if (!formSchema || !Array.isArray(formSchema)) {
+        return tasks;
+    }
+
+    // Assuming formSchema is an array of rows, each with columns and fields
+    formSchema.forEach(row => {
+        if (row.columns && Array.isArray(row.columns)) {
+            row.columns.forEach(col => {
+                if (col.fields && Array.isArray(col.fields)) {
+                    col.fields.forEach(field => {
+                        // If the form is a 'reminder_task_list', assume all fields are tasks.
+                        // Or, if a field has a specific 'isTask' property set by your builder.
+                        // For demonstration, let's just take label/name as description.
+                        if (field.label && field.name) { // Ensure it has a label and a name
+                            tasks.push({
+                                taskId: field.name, // Use field.name as a unique ID for the task
+                                description: field.label, // Use field.label as the task description
+                                isCompleted: false, // Default to not completed
+                            });
+                        }
+                    });
+                }
+            });
+        }
+    });
+    return tasks;
+};
+
 
 /**
  * @desc Get all jobs for a company (with optional filters for staff)
@@ -73,42 +120,54 @@ const getJobById = asyncHandler(async (req, res) => {
  * @access Private (Admin, Manager)
  */
 const createJob = asyncHandler(async (req, res) => {
-    // --- THIS IS THE CRUCIAL LOG ---
-    // This will show EXACTLY what req.body contains when the request reaches this controller.
     console.log('Backend received job creation request with body (req.body):', JSON.stringify(req.body, null, 2));
-    // --- END CRUCIAL LOG ---
-
-    const { customer, staff, serviceType, description, address, date, time, priority, price, usedStock } = req.body;
+    const { customer, staff, serviceType, description, address, date, time, priority, price, usedStock, formTemplate } = req.body; // NEW: Receive formTemplate
     const companyId = req.user.company;
 
-    // --- START: More specific validation for required fields ---
     let missingFields = [];
 
     if (!customer) missingFields.push('customer');
     if (!staff || !Array.isArray(staff) || staff.length === 0) missingFields.push('staff');
     if (!serviceType) missingFields.push('serviceType');
-    // Check if address object is empty or has no meaningful fields
     if (!address || (Object.keys(address).length === 0 && !address.street && !address.city && !address.postcode && !address.country)) missingFields.push('address');
     if (!date) missingFields.push('date');
-    if (typeof price !== 'number') missingFields.push('price'); // Check if price is a number
+    if (typeof price !== 'number') missingFields.push('price');
 
     if (missingFields.length > 0) {
         res.status(400);
         const errorMessage = `Missing or invalid required job fields: ${missingFields.join(', ')}.`;
-        console.error(errorMessage); // Log the specific error
+        console.error(errorMessage);
         throw new Error(errorMessage);
     }
-    // --- END: More specific validation ---
 
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
+        let jobTasks = [];
+        // NEW: If a formTemplate is provided, extract tasks from its schema
+        if (formTemplate) {
+            const form = await Form.findById(formTemplate).session(session);
+            if (!form) {
+                await session.abortTransaction();
+                session.endSession();
+                res.status(404);
+                throw new Error(`Task list form with ID ${formTemplate} not found.`);
+            }
+            // Only extract tasks if the form's purpose is 'reminder_task_list'
+            if (form.purpose === 'reminder_task_list') {
+                jobTasks = extractTasksFromFormSchema(form.schema);
+                console.log(`Extracted ${jobTasks.length} tasks from form template ${form.name}.`);
+            } else {
+                console.warn(`Form template ${form.name} (ID: ${formTemplate}) is not a 'reminder_task_list' purpose. Tasks will not be initialized from it.`);
+            }
+        }
+
         // Create the job
         const job = await Job.create([{
             company: companyId,
             customer,
-            staff: staff, // Ensure staff is correctly passed as an array of ObjectIds
+            staff: staff,
             serviceType,
             description,
             address,
@@ -116,7 +175,9 @@ const createJob = asyncHandler(async (req, res) => {
             time,
             priority,
             price,
-            usedStock: usedStock || [], // Initialize usedStock
+            usedStock: usedStock || [],
+            formTemplate: formTemplate || null, // NEW: Save the formTemplate ID
+            tasks: jobTasks, // NEW: Initialize tasks from the template
         }], { session });
 
         const newJob = job[0];
@@ -129,7 +190,7 @@ const createJob = asyncHandler(async (req, res) => {
                     await session.abortTransaction();
                     session.endSession();
                     res.status(404);
-                    throw new Error(`Stock item with ID ${stockId} not found or not authorized.`);
+                    throw new Error(`Stock item with ID ${item.stockId} not found or not authorized.`);
                 }
                 if (stockItem.stockQuantity < item.quantity) {
                     await session.abortTransaction();
@@ -153,7 +214,6 @@ const createJob = asyncHandler(async (req, res) => {
     } catch (error) {
         await session.abortTransaction();
         session.endSession();
-        // Log the actual Mongoose validation error if it's a ValidationError
         if (error.name === 'ValidationError') {
             const errors = Object.values(error.errors).map(err => err.message);
             console.error('Mongoose Validation Error:', errors.join(', '));
@@ -172,8 +232,7 @@ const createJob = asyncHandler(async (req, res) => {
  */
 const updateJob = asyncHandler(async (req, res) => {
     const companyId = req.user.company;
-    const { usedStock, ...updateData } = req.body; // Separate usedStock from other update data
-
+    const { usedStock, formTemplate, tasks, ...updateData } = req.body; // NEW: Receive formTemplate and tasks for update
     const job = await Job.findById(req.params.id);
 
     if (!job || job.company.toString() !== companyId.toString()) {
@@ -190,6 +249,33 @@ const updateJob = asyncHandler(async (req, res) => {
             console.warn("Stock update logic in updateJob is not fully implemented. Consider separate endpoints for stock adjustments.");
             job.usedStock = usedStock; // Directly assign for now, but advise caution
         }
+
+        // NEW: Handle formTemplate and tasks update
+        if (formTemplate !== undefined) { // Check if formTemplate was sent
+            job.formTemplate = formTemplate;
+            // If formTemplate is changed, re-initialize tasks from new template
+            if (formTemplate && job.formTemplate?.toString() !== formTemplate) { // If changed to a new template
+                const form = await Form.findById(formTemplate).session(session);
+                if (form && form.purpose === 'reminder_task_list') {
+                    job.tasks = extractTasksFromFormSchema(form.schema);
+                    console.log(`Re-initialized tasks from new template ${form.name} for job ${job._id}.`);
+                } else {
+                    job.tasks = []; // Clear tasks if template is removed or not a task list
+                    console.warn(`Form template ${formTemplate} is not a 'reminder_task_list' purpose or not found. Tasks for job ${job._id} cleared.`);
+                }
+            } else if (!formTemplate) { // If formTemplate is being cleared
+                job.tasks = [];
+            }
+        }
+        // If tasks are sent directly (e.g., from JobDetailsModal updates), merge them
+        if (tasks && Array.isArray(tasks)) {
+            // This logic allows partial updates to tasks (e.g., just changing isCompleted)
+            // It iterates through incoming tasks and updates matching ones in job.tasks
+            // For new tasks in the incoming 'tasks' array, they would be added.
+            // For simplicity, let's assume tasks array from frontend is the source of truth for updates
+            job.tasks = tasks; // Overwrite with frontend's task list for now
+        }
+
 
         // Update other job fields
         Object.assign(job, updateData);
@@ -338,7 +424,7 @@ const clockOutJob = asyncHandler(async (req, res) => {
 
     if (job.clockOutTime) {
         res.status(400);
-        throw new Error('Already clocked out for this job.');
+        throw new new Error('Already clocked out for this job.');
     }
 
     job.clockOutTime = new Date();

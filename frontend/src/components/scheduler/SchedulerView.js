@@ -1,3 +1,5 @@
+// src/components/scheduler/SchedulerView.jsx
+
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import CalendarHeader from './CalendarHeader';
 import MonthView from './MonthView';
@@ -16,6 +18,7 @@ const LOCAL_STORAGE_CURRENT_DATE_KEY = 'schedulerCurrentDate';
 
 const SchedulerView = (props) => {
     // --- Retrieve initial state from localStorage or use defaults ---
+    // MOVED THESE FUNCTION DEFINITIONS TO THE TOP, BEFORE useState CALLS
     const getInitialViewMode = () => {
         return localStorage.getItem(LOCAL_STORAGE_VIEW_MODE_KEY) || 'month';
     };
@@ -38,6 +41,7 @@ const SchedulerView = (props) => {
     const [jobs, setJobs] = useState([]);
     const [customers, setCustomers] = useState([]);
     const [staff, setStaff] = useState([]);
+    // These useState calls now correctly reference the functions defined above them
     const [viewMode, setViewMode] = useState(getInitialViewMode);
     const [dayViewLayout, setDayViewLayout] = useState(getInitialDayViewLayout);
     const [currentDate, setCurrentDate] = useState(getInitialCurrentDate);
@@ -80,7 +84,7 @@ const SchedulerView = (props) => {
 
             if (viewMode === 'month') {
                 const firstDayOfMonth = startOfMonth(baseDate);
-                const lastDayOfMonth = endOfMonth(baseDate);
+                const lastDayOfMonth = endOfMonth(baseDate); 
 
                 const firstDayOfCalendarGrid = new Date(firstDayOfMonth);
                 firstDayOfCalendarGrid.setDate(firstDayOfCalendarGrid.getDate() - getDay(firstDayOfCalendarGrid));
@@ -260,16 +264,22 @@ const SchedulerView = (props) => {
         );
     }, [jobs, customerFilter, staffFilter]);
 
-    const isLoadingData = isLoadingJobs; 
+    const isLoadingData = isLoadingJobs;    
 
     return (
-        <div className="flex flex-col h-full">
+        // Outermost div for the entire Scheduler page.
+        // It provides the overall padding (p-8) for the page content.
+        <div className="h-full flex flex-col p-8">
             {userFacingError && (
                 <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
                     {userFacingError}
                 </div>
             )}
 
+            {/* Calendar Header: It now spans the full width within the p-8 padding of its parent.
+                Removed max-w-7xl and mx-auto from here.
+                The padding now comes from the parent div.
+            */}
             <CalendarHeader
                 currentDate={currentDate}
                 viewMode={viewMode}
@@ -284,10 +294,13 @@ const SchedulerView = (props) => {
                 onStaffFilterChange={setStaffFilter}
                 isLoadingCustomers={isLoadingCustomers}
                 isLoadingStaff={isLoadingStaff}
-                className="flex-shrink-0"
+                className="flex-shrink-0 mb-6" // This class manages its own internal flex layout/spacing
             />
 
-            <div className="bg-white rounded-xl shadow-lg mt-6 flex-1 flex-col">
+            {/* Main Content Area: This div will be the "card" for the calendar views.
+                It has a white background, shadow, rounded corners, padding, and is centered.
+            */}
+            <div className="bg-white rounded-xl shadow-lg flex-1 flex flex-col p-6 w-full">
                 {isLoadingData ? (
                     <div className="p-10 text-center text-gray-500 text-xl font-semibold flex items-center justify-center flex-1">
                         <Loader /><span className="ml-4">Loading Scheduler Data...</span>

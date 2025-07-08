@@ -1,3 +1,5 @@
+// src/components/dashboard/Dashboard.jsx
+
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
@@ -6,14 +8,12 @@ const Dashboard = () => {
     const { user } = useAuth();
 
     return (
-        // The outermost div with p-8, bg-gradient-to-br, and min-h-screen
-        // sets the background and minimum height for the entire content area.
-        <div className="p-8 bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen">
-            {/* THIS IS THE CRUCIAL CHANGE TO FIX THE RIGHT-HAND GAP */}
-            {/* Removed 'max-w-7xl' and 'mx-auto' to allow full width expansion. */}
-            {/* 'w-full' makes this div take up 100% of its parent's width. */}
-            {/* The 'p-8' on the outer div already provides sufficient padding around the whole content. */}
-            <div className="w-full">
+        // REMOVE 'p-8' from this outermost div
+        // The App.js <main> tag already handles the margin from the sidebar.
+        // If you want padding INSIDE the dashboard content, you should add a new inner div for that.
+        <div className="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen">
+            {/* NEW: Add an inner div here if you want padding for the *content* of the dashboard */}
+            <div className="p-8"> {/* This div now provides the desired content padding */}
                 <h1 className="text-4xl font-extrabold text-gray-900 mb-8 tracking-tight">
                     Welcome to your Dashboard, <span className="text-blue-600">{user?.email}!</span>
                 </h1>
@@ -112,7 +112,7 @@ const Dashboard = () => {
                         </ul>
                     </div>
                 </div>
-            </div>
+            </div> {/* Closing the new inner p-8 div */}
         </div>
     );
 };

@@ -18,6 +18,7 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
         recurring: { pattern: 'none', endDate: '' }, createdBy: null,
         usedStockItems: [],
         price: 0, // Initialized to 0
+        formTemplate: '', // NEW: Add formTemplate field
     });
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState(null);
@@ -27,6 +28,7 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
     const [availableStock, setAvailableStock] = useState([]);
     const [selectedStockItemId, setSelectedStockItemId] = useState('');
     const [stockQuantityToAdd, setStockQuantityToAdd] = useState(1);
+    const [taskLists, setTaskLists] = useState([]); // NEW: State for fetched task lists
 
     const { isMapsLoaded, isMapsLoadError } = useMapsApi();
 
@@ -64,6 +66,18 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
                 }))
         ];
     }, [availableStock, formData.usedStockItems]);
+
+    // NEW: Memoized options for task lists dropdown
+    const taskListOptions = useMemo(() => {
+        return [
+            { value: '', label: 'No Task List' },
+            ...(taskLists || []).map(list => ({
+                value: list._id,
+                label: list.name,
+            }))
+        ];
+    }, [taskLists]);
+
 
     useEffect(() => {
         if (isOpen) {
@@ -107,12 +121,14 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
                     unit: item.stockItem?.unit,
                     quantityUsed: item.quantityUsed
                 })) || [],
-                price: jobData?.price ?? 0, // Use nullish coalescing operator (??) for price to handle 0 correctly
+                price: jobData?.price ?? 0,
+                formTemplate: jobData?.formTemplate || '', // NEW: Populate formTemplate from jobData
             });
             setFormError(null);
             setAvailabilityError(null);
             setSuccessMessage(null);
             fetchAvailableStock();
+            fetchTaskLists(); // NEW: Fetch task lists when modal opens
         }
     }, [isOpen, jobData, customers]);
 
@@ -126,9 +142,19 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
         }
     };
 
+    // NEW: Fetch task lists (forms with purpose 'reminder_task_list')
+    const fetchTaskLists = async () => {
+        try {
+            const res = await api.get('/forms', { params: { purpose: 'reminder_task_list' } });
+            setTaskLists(res.data);
+        } catch (err) {
+            console.error("Failed to fetch task lists:", err);
+            // Optionally set a formError if task lists are critical
+        }
+    };
+
     const handleChange = (e) => {
         const { name, value, type } = e.target;
-        // Ensure numbers are parsed correctly. If a number input is empty, default to 0.
         let newValue;
         if (type === 'number') {
             newValue = value === '' ? 0 : parseFloat(value);
@@ -151,8 +177,6 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
             const selectedCust = customers.find(c => c._id === customerId);
             if (selectedCust) {
                 setSelectedCustomerDetails(selectedCust);
-                // When customer changes, update address. Price auto-population based on service address
-                // would go here if implemented. For now, it's a manual input.
                 setFormData(prev => ({ ...prev, address: selectedCust.address || {} }));
             }
         } else {
@@ -161,16 +185,12 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
         }
     };
 
-    // FIX: Ensure handleAddressChange receives and sets an object, not a string
     const handleAddressChange = useCallback((newAddressObject) => {
-        // The AddressInput component should return an object {street, city, etc.}
-        // Ensure that newAddressObject is indeed an object here.
         if (typeof newAddressObject === 'object' && newAddressObject !== null) {
             setFormData(prev => ({ ...prev, address: newAddressObject }));
         } else {
-            // Fallback or error handling if AddressInput sends something unexpected
             console.error("AddressInput did not return an object:", newAddressObject);
-            setFormData(prev => ({ ...prev, address: {} })); // Reset to empty object
+            setFormData(prev => ({ ...prev, address: {} }));
         }
     }, []);
 
@@ -246,14 +266,11 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
             return;
         }
 
-        // Validate required fields including price
-        // Ensure price is a number and not null/undefined
         if (!formData.customer || !formData.serviceType || !formData.date || !formData.time || !formData.duration || typeof formData.price !== 'number') {
             setFormError('Please fill in all required fields: Customer, Service Type, Date, Time, Duration, and a valid Price.');
             setSaving(false);
             return;
         }
-        // Validate address object (check if it has at least one meaningful field)
         const isAddressValid = formData.address && typeof formData.address === 'object' && (
             formData.address.street || formData.address.city || formData.address.postcode || formData.address.country
         );
@@ -265,9 +282,8 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
 
 
         const dataToSend = { ...formData };
-        // FIX: Rename assignedStaff to staff for backend
         dataToSend.staff = dataToSend.assignedStaff;
-        delete dataToSend.assignedStaff; // Remove the old field
+        delete dataToSend.assignedStaff;
 
         if (dataToSend.recurring.pattern === 'none') {
             delete dataToSend.recurring;
@@ -281,7 +297,7 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
         }
         
         try {
-            console.log('Job data being sent (frontend):', dataToSend); // DEBUG LOG
+            console.log('Job data being sent (frontend):', dataToSend);
             let res;
             if (jobData?._id) {
                 res = await api.put(`/jobs/${jobData._id}`, dataToSend);
@@ -350,6 +366,16 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
                     {formData.recurring.pattern !== 'none' && (
                         <ModernInput label="Repeat Until Date" name="recurringEndDate" type="date" value={formData.recurring.endDate || ''} onChange={handleChange} required helpText="The job will repeat according to the pattern until this date." />
                     )}
+                    {/* NEW: Task List Dropdown */}
+                    <ModernSelect
+                        label="Select Task List Template (Optional)"
+                        name="formTemplate" // Name matches the formTemplate field in Job model
+                        value={formData.formTemplate}
+                        onChange={handleChange}
+                        options={taskListOptions} // This will contain your 'reminder_task_list' forms
+                        helpText="Choose a task list from your Form Builder to auto-populate job tasks."
+                    />
+                    {/* End NEW: Task List Dropdown */}
                     <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
                         <label className="block text-sm font-medium text-gray-700 mb-2">Assigned Staff</label>
                         {availabilityError && (
@@ -452,6 +478,7 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
 };
 
 export default JobModal;
+
 
 
 

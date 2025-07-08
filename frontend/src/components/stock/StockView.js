@@ -252,4 +252,3 @@ const StockView = () => {
 };
 
 export default StockView;
-

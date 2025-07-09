@@ -5,7 +5,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { AuthProvider, useAuth } from './components/context/AuthContext';
 import { CurrencyProvider } from './components/context/CurrencyContext';
 
-// --- ALL YOUR COMPONENT IMPORTS ---
+// --- COMPONENT IMPORTS ---
 import LoginPage from './components/auth/LoginPage';
 import SignUpPage from './components/auth/SignUpPage';
 import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
@@ -24,9 +24,9 @@ import SchedulerView from './components/scheduler/SchedulerView';
 import StockView from './components/stock/StockView';
 import SpotCheckerPage from './components/dashboard/SpotCheckerPage';
 import RoutePlannerView from './components/route-planner/RoutePlannerView';
-
-// NEW: Import StaffAbsencePage
 import StaffAbsencePage from './components/staff/StaffAbsencePage';
+import InvoicePage from './components/invoices/InvoicePage';
+import InvoiceDetails from './components/invoices/InvoiceDetails'; // NEW: Import the InvoiceDetails component
 
 
 import { DndProvider } from 'react-dnd';
@@ -119,7 +119,6 @@ function AppContent() {
             {showSidebarLayout && (
                 <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} user={user} logout={logout} />
             )}
-            {/* Removed p-8 from here. Add padding directly to your page components (e.g., in LeadsView.jsx) */}
             <main className={`flex-1 overflow-auto transition-all duration-300 ease-in-out ${showSidebarLayout && isSidebarOpen ? 'ml-64' : (showSidebarLayout ? 'ml-20' : 'ml-0')}`}>
                 <MapsApiProvider>
                     <Routes>
@@ -142,20 +141,19 @@ function AppContent() {
                         <Route path="/stock" element={<PrivateRoute roles={['admin', 'manager', 'staff']}><StockView /></PrivateRoute>} />
                         <Route path="/spot-checker" element={<PrivateRoute roles={['admin', 'manager', 'staff']}><SpotCheckerPage /></PrivateRoute>} />
                         <Route path="/route-planner" element={<PrivateRoute roles={['admin', 'manager']}><RoutePlannerView /></PrivateRoute>} />
-
-                        {/* NEW: Staff Absence Page Route */}
                         <Route path="/staff-absence" element={<PrivateRoute roles={['admin', 'manager']}><StaffAbsencePage /></PrivateRoute>} />
-
                         <Route path="/email-templates" element={<PrivateRoute roles={['admin']}><EmailTemplatesView /></PrivateRoute>} />
 
-                        {/* Placeholder Routes - REMEMBER TO ADD p-8 (or similar) to these actual components when they are built */}
+                        {/* --- INVOICE ROUTES --- */}
+                        {/* Base invoice listing page */}
+                        <Route path="/invoices" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><InvoicePage /></PrivateRoute>} />
+                        {/* NEW: Invoice Details Page - This route must come AFTER the base /invoices route */}
+                        <Route path="/invoices/:invoiceId" element={<PrivateRoute roles={['admin', 'manager', 'staff']}><InvoiceDetails /></PrivateRoute>} />
+                        
                         <Route path="/jobs" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><div className="p-8">Job Management Page</div></PrivateRoute>} />
-                        <Route path="/invoices" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><div className="p-8">Invoices Page</div></PrivateRoute>} />
                         <Route path="/quotes" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><div className="p-8">Quotes Page</div></PrivateRoute>} />
-                        {/* Payroll and Commission Report are missing in routes but present in sidebar. Ensure you add them */}
                         <Route path="/payroll" element={<PrivateRoute roles={['admin']}><div className="p-8">Payroll Page</div></PrivateRoute>} />
                         <Route path="/commission-report" element={<PrivateRoute roles={['admin', 'manager']}><div className="p-8">Commission Report Page</div></PrivateRoute>} />
-
 
                         {/* Default Route */}
                         <Route path="/" element={loading ? <div>Loading...</div> : <Navigate to={user ? getDefaultDashboardPath(user.role) : "/login"} replace />} />
@@ -166,7 +164,6 @@ function AppContent() {
     );
 }
 
-// The main App component that sets up all the providers
 function App() {
     return (
         <Router>

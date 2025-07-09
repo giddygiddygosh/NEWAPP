@@ -7,7 +7,7 @@ const CompanySettingSchema = new mongoose.Schema({
         type: mongoose.Schema.ObjectId,
         ref: 'Company',
         required: true,
-        unique: true // Keep this one, it's concise for a single-field unique index
+        unique: true // Ensures only one settings document per company
     },
     // General Settings
     companyLogoUrl: {
@@ -41,7 +41,7 @@ const CompanySettingSchema = new mongoose.Schema({
         type: String,
         default: '0.375rem' // rounded-md
     },
-    // NEW: Default Currency Setting
+    // Default Currency Setting
     defaultCurrency: {
         code: { type: String, default: 'GBP' }, // e.g., GBP, USD, EUR
         symbol: { type: String, default: '£' }, // e.g., £, $, €
@@ -50,25 +50,46 @@ const CompanySettingSchema = new mongoose.Schema({
         decimalSeparator: { type: String, default: '.' },
         formatTemplate: { type: String, default: '{symbol}{amount}' } // e.g., {symbol}{amount}, {amount}{symbol}
     },
-    // NEW: Email Automation Settings
+    // Email Automation Settings
     emailAutomation: {
-        welcome_email: { enabled: { type: Boolean, default: true } }, // <--- CHANGED THIS FROM 'false' TO 'true'
+        welcome_email: { enabled: { type: Boolean, default: true } },
         appointment_reminder: {
             enabled: { type: Boolean, default: false },
-            daysBefore: { type: Number, default: 1, min: 0 }, // e.g., 1 day before
+            daysBefore: { type: Number, default: 1, min: 0 },
         },
         job_completion: { enabled: { type: Boolean, default: false } },
-        invoice_email: { enabled: { type: Boolean, default: false } }, // For the missing invoice email
+        invoice_email: { enabled: { type: Boolean, default: false } },
         invoice_reminder: {
             enabled: { type: Boolean, default: false },
-            daysAfter: { type: Number, default: 7, min: 0 }, // e.g., 7 days after
+            daysAfter: { type: Number, default: 7, min: 0 },
         },
         review_request: {
             enabled: { type: Boolean, default: false },
-            daysAfter: { type: Number, default: 3, min: 0 }, // e.g., 3 days after completion
+            daysAfter: { type: Number, default: 3, min: 0 },
         },
-        // Add other configurable email types here if needed
     },
+
+    // NEW: Invoice Settings
+    invoiceSettings: {
+        nextInvoiceSeqNumber: {
+            type: Number,
+            default: 1, // Next sequential number to be used, e.g., for INV-0001
+            min: 1,
+        },
+        invoicePrefix: {
+            type: String,
+            default: 'INV-', // Prefix for invoice numbers, e.g., "INV-001"
+            trim: true,
+        },
+        defaultTaxRate: {
+            type: Number,
+            default: 0, // Default tax rate as a decimal (e.g., 0.20 for 20%)
+            min: 0,
+            max: 1, // Max 100% (for rates represented as decimals)
+        },
+        // Add other invoice-related settings here if needed, e.g., default payment terms days
+    },
+
     createdAt: {
         type: Date,
         default: Date.now,

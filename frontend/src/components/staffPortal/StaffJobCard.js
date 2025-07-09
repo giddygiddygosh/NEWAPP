@@ -14,7 +14,6 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
     const [actionLoading, setActionLoading] = useState(null);
     const [stockReturnNewStatus, setStockReturnNewStatus] = useState('');
 
-    // Helper to format time nicely
     const formatTime = (timeString) => {
         if (!timeString) return 'N/A';
         try {
@@ -28,18 +27,16 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
         }
     };
 
-    // --- Job Action Handlers ---
-
     const handleClockIn = useCallback(async () => {
         setActionLoading('clockIn');
-        onActionError(null);
         try {
             const res = await api.put(`/jobs/${job._id}/clock-in`);
-            onJobUpdated(res.data.job);
-            alert('Clocked in successfully!');
+            // FIX: Backend returns the job object directly for clock-in/out
+            onJobUpdated(res.data); // <--- CHANGED FROM res.data.job
+            console.log('Clocked in successfully! Received job:', res.data);
         } catch (err) {
             console.error("Error clocking in:", err);
-            onActionError(err.response?.data?.message || 'Failed to clock in.');
+            onActionError(err);
         } finally {
             setActionLoading(null);
         }
@@ -47,23 +44,21 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
 
     const handleClockOut = useCallback(async () => {
         setActionLoading('clockOut');
-        onActionError(null);
         try {
             const res = await api.put(`/jobs/${job._id}/clock-out`);
-            onJobUpdated(res.data.job);
-            alert('Clocked out successfully!');
+            // FIX: Backend returns the job object directly for clock-in/out
+            onJobUpdated(res.data); // <--- CHANGED FROM res.data.job
+            console.log('Clocked out successfully! Received job:', res.data);
         } catch (err) {
             console.error("Error clocking out:", err);
-            onActionError(err.response?.data?.message || 'Failed to clock out.');
+            onActionError(err);
         } finally {
             setActionLoading(null);
         }
     }, [job._id, onJobUpdated, onActionError]);
 
-    // FIX: Moved handleReturnStockAndComplete definition BEFORE handleCompleteJobClick
     const handleReturnStockAndComplete = useCallback(async (jobToUpdate, returnedStockData, statusToApply) => {
         setActionLoading('complete');
-        onActionError(null);
         setIsStockReturnModalOpen(false); // Close the modal
 
         try {
@@ -71,17 +66,17 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
                 returnedStockItems: Object.entries(returnedStockData).map(([stockId, quantity]) => ({ stockId, quantity })),
                 newStatus: statusToApply,
             });
+            // This one is correct, as backend returns { message: ..., job: ... }
             onJobUpdated(res.data.job);
-            alert(`Job marked as ${statusToApply} and stock updated!`);
+            console.log(`Job marked as ${statusToApply} and stock updated! Received job:`, res.data.job);
         } catch (err) {
             console.error("Error completing job or returning stock:", err);
-            onActionError(err.response?.data?.message || 'Failed to complete job or return stock.');
+            onActionError(err);
         } finally {
             setActionLoading(null);
         }
     }, [onJobUpdated, onActionError]);
 
-    // handleCompleteJobClick now uses handleReturnStockAndComplete after its definition
     const handleCompleteJobClick = useCallback((statusAfterReturn = 'Completed') => {
         if (job.usedStock && job.usedStock.length > 0) {
             setStockReturnNewStatus(statusAfterReturn);
@@ -89,9 +84,8 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
         } else {
             handleReturnStockAndComplete(job, {}, statusAfterReturn);
         }
-    }, [job, handleReturnStockAndComplete]); // Dependency array is correct
+    }, [job, handleReturnStockAndComplete]);
 
-    // Determine button states based on job properties
     const isClockedIn = !!job.clockInTime;
     const isClockedOut = !!job.clockOutTime;
     const isCompleted = job.status === 'Completed';
@@ -106,14 +100,13 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
             </p>
             <div className="flex items-center text-gray-700 mb-2">
                 <MapPin size={18} className="mr-2 text-blue-500" />
-                <span>{job.address.street}, {job.address.city}</span>
+                <span>{job.address?.street}, {job.address?.city}</span>
             </div>
             <div className="flex items-center text-gray-700 mb-4">
                 <ChevronRight size={18} className="mr-2 text-purple-500" />
                 <span>Customer: {job.customer?.contactPersonName || 'N/A'}</span>
             </div>
 
-            {/* Job Status Badge */}
             <span className={`px-3 py-1 rounded-full text-sm font-semibold mb-4 inline-block
                 ${isCompleted ? 'bg-green-100 text-green-800' :
                   isInProgress ? 'bg-yellow-100 text-yellow-800' :
@@ -122,7 +115,6 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
                 Status: {job.status}
             </span>
 
-            {/* Clock In/Out Times Display */}
             {job.clockInTime && (
                 <p className="text-sm text-gray-600 mt-2">
                     <Clock size={16} className="inline-block mr-1" /> Clocked In: {format(new Date(job.clockInTime), 'hh:mm a (dd/MM)')}
@@ -134,9 +126,7 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
                 </p>
             )}
 
-            {/* Action Buttons */}
             <div className="mt-4 flex flex-wrap gap-3">
-                {/* Clock In Button: Show only if NOT clocked in AND NOT completed */}
                 {!isClockedIn && !isCompleted && (
                     <button
                         onClick={handleClockIn}
@@ -148,7 +138,6 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
                     </button>
                 )}
 
-                {/* Clock Out Button: Show only if clocked in AND NOT clocked out AND NOT completed */}
                 {isClockedIn && !isClockedOut && !isCompleted && (
                     <button
                         onClick={handleClockOut}
@@ -160,7 +149,6 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
                     </button>
                 )}
 
-                {/* Details Button: Always show for non-completed jobs */}
                 {!isCompleted && (
                     <button
                         onClick={() => setIsDetailsModalOpen(true)}
@@ -170,7 +158,6 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
                     </button>
                 )}
                 
-                {/* Complete Job Button: Show only if clocked out AND NOT completed */}
                 {isClockedOut && !isCompleted && (
                     <button
                         onClick={() => handleCompleteJobClick()}
@@ -183,7 +170,6 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
                 )}
             </div>
 
-            {/* Modals */}
             <JobDetailsModal
                 isOpen={isDetailsModalOpen}
                 onClose={() => setIsDetailsModalOpen(false)}
@@ -204,5 +190,3 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
 };
 
 export default StaffJobCard;
-
-

@@ -24,24 +24,21 @@ connectDB();
 
 const app = express();
 
-// --- GLOBAL DEBUG LOG - This should log EVERY request hitting Express ---
 app.use((req, res, next) => {
     console.log(`GLOBAL REQUEST DEBUG: Method: ${req.method}, Path: ${req.originalUrl}, Time: ${new Date().toISOString()}`);
-    next(); // IMPORTANT: Call next() to pass the request to other middleware/routes
+    next();
 });
-// --- END GLOBAL DEBUG LOG ---
 
-// --- IMPORTANT: Place CORS and body-parsing middleware BEFORE routes ---
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-app.use(express.json()); // Parses incoming JSON payloads
-app.use(express.urlencoded({ extended: false })); // Parses URL-encoded data (e.g., from HTML forms)
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
-// Import Routes (MUST come AFTER body-parsing middleware)
+// Import Routes
 const authRoutes = require('./routes/authRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const leadRoutes = require('./routes/leadRoutes');
@@ -54,10 +51,10 @@ const jobRoutes = require('./routes/jobRoutes');
 const stockRoutes = require('./routes/stockRoutes');
 const emailTemplateRoutes = require('./routes/emailTemplateRoutes');
 const absenceRoutes = require('./routes/absenceRoutes');
+const invoiceRoutes = require('./routes/invoiceRoutes');
 
-// Make the 'uploads' folder static (where uploaded images will be stored)
+// Make the 'uploads' folder static
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
 
 // Use Routes
 app.use('/api/auth', authRoutes);
@@ -70,28 +67,34 @@ app.use('/api/staff', staffRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/stock', stockRoutes);
 app.use('/api/email-templates', emailTemplateRoutes);
-
-// --- /api/absences SPECIFIC DEBUG LOG and ROUTE MOUNTING ---
-app.use('/api/absences', (req, res, next) => {
-    console.log(`DEBUG (Server.js): Request received for /api/absences${req.url}. Method: ${req.method}`);
-    next();
-});
-
+app.use('/api/invoices', invoiceRoutes);
 app.use('/api/absences', absenceRoutes);
-
 app.use('/api/public/forms', publicRoutes);
-
 
 app.get('/', (req, res) => {
     res.send('API is running...');
 });
 
-// --- /test-ping ROUTE ---
-app.get('/test-ping', (req, res) => {
-    console.log("TEST PING ROUTE HIT! SERVER IS RESPONDING.");
-    res.status(200).send("Server Test Ping OK.");
-});
-// --- END /test-ping ROUTE ---
+// Handler for 404 Not Found (if no other route matches)
+const notFound = (req, res, next) => {
+    const error = new Error(`Not Found - ${req.originalUrl}`);
+    res.status(404);
+    next(error);
+};
+
+// Main Error Handler (catches all errors)
+const errorHandler = (err, req, res, next) => {
+    const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+    res.status(statusCode);
+    res.json({
+        message: err.message,
+        stack: process.env.NODE_ENV === 'production' ? null : err.stack,
+    });
+};
+
+// Use the error middleware AFTER all your API routes
+app.use(notFound);
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 5004;
 

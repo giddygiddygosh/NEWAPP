@@ -1,5 +1,3 @@
-// backend/models/Job.js
-
 const mongoose = require('mongoose');
 
 const JobSchema = new mongoose.Schema({
@@ -33,6 +31,13 @@ const JobSchema = new mongoose.Schema({
         state: { type: String, trim: true },
         postcode: { type: String, trim: true },
         country: { type: String, trim: true },
+        payType: {
+            type: String,
+            enum: ['Fixed', 'Hourly', ''],
+        },
+        amount: {
+            type: Number,
+        },
     },
     date: {
         type: Date,
@@ -44,7 +49,8 @@ const JobSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['Booked', 'On Route', 'In Progress', 'Pending Completion', 'Completed', 'Cancelled'],
+        // FIX: Add 'Invoiced' to the enum array
+        enum: ['Booked', 'On Route', 'In Progress', 'Pending Completion', 'Completed', 'Cancelled', 'Invoiced'],
         default: 'Booked',
     },
     priority: {
@@ -102,16 +108,14 @@ const JobSchema = new mongoose.Schema({
             },
         },
     ],
-    // NEW FIELD: Reference to the Form (task list template) used for this job
     formTemplate: {
         type: mongoose.Schema.ObjectId,
         ref: 'Form',
-        default: null, // Optional, not all jobs might have a template
+        default: null,
     },
-    // Tasks list for the job (populated from formTemplate's schema, or manually added)
     tasks: [
         {
-            taskId: { // Unique ID for the task, could be generated or from form template
+            taskId: {
                 type: String,
                 required: true,
             },

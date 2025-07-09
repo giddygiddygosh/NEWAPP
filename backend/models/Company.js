@@ -35,9 +35,24 @@ const companySchema = new mongoose.Schema({
             decimalSeparator: { type: String, default: '.' },
             formatTemplate: { type: String, default: '{symbol}{amount}' },
         },
+        invoiceSettings: {
+            prefix: {
+                type: String,
+                trim: true,
+                default: 'INV-',
+            },
+            nextNumber: {
+                type: Number,
+                default: 1001,
+            },
+            defaultDueDateDays: {
+                type: Number,
+                default: 30,
+            }
+        },
     },
 }, {
-    timestamps: true, // This is the correct place for timestamps
+    timestamps: true,
 });
 
 const Company = mongoose.model('Company', companySchema);

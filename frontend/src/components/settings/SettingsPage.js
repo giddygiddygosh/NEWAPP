@@ -3,72 +3,67 @@ import api from '../../utils/api';
 import Loader from '../common/Loader';
 import ModernInput from '../common/ModernInput';
 import ModernSelect from '../common/ModernSelect';
-import AddressInput from '../common/AddressInput'; // Ensure AddressInput is imported
+import AddressInput from '../common/AddressInput';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 
-// Firebase Auth specific imports (ensure these are needed for change password/email sections)
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, updateEmail } from 'firebase/auth';
-
-// Helper imports
-import { getCurrencySymbol } from '../../utils/helpers'; // Assuming this utility exists
+import { getCurrencySymbol } from '../../utils/helpers';
 
 const SettingsPage = () => {
-    const { user, loading: authLoading, auth } = useAuth(); // `auth` is Firebase auth instance
+    const { user, loading: authLoading, auth } = useAuth();
     const { currency, loading: currencyLoading, error: currencyError, updateCurrency, formatCurrency } = useCurrency();
 
-    const [settings, setSettings] = useState(null); // Stores the full fetched backend settings object
-    const [loading, setLoading] = useState(true); // Manages loading state for the page's data fetch
-    const [saving, setSaving] = useState(false); // Manages saving state for form submission
-    const [error, setError] = useState(null); // Displays general page/fetch errors
-    const [successMessage, setSuccessMessage] = useState(null); // Displays general success messages
-    const [activeTab, setActiveTab] = useState('company'); // Manages which tab is active ('company', 'currency', 'my-account')
+    const [settings, setSettings] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState(null);
+    const [successMessage, setSuccessMessage] = useState(null);
+    const [activeTab, setActiveTab] = useState('company');
 
+    const defaultAddress = useMemo(() => ({ street: '', city: '', county: '', postcode: '', country: '' }), []);
 
-    // Define a consistent default empty address object
-    const defaultAddress = { street: '', city: '', county: '', postcode: '', country: '' };
-
-    // Local form state, mirroring CompanySetting and User properties
     const [localSettings, setLocalSettings] = useState({
-        companyName: '', // From Company model
-        companyLogoUrl: '', // From CompanySetting
-        companyAddress: defaultAddress, // Initialize with a full default object
-        companyPhone: '', // From CompanySetting
-        companyEmail: '', // From CompanySetting
-        companyWebsite: '', // From CompanySetting
+        companyName: '',
+        companyLogoUrl: '',
+        // These now come from fetchedSettings.company.settings.property
+        companyAddress: defaultAddress,
+        companyPhone: '',
+        companyEmail: '',
+        companyWebsite: '',
         companyTaxId: '',
+        defaultFormName: '',
 
-        // UI Styling Overrides
         backgroundColor: '#FFFFFF',
         primaryColor: '#3B82F6',
         borderColor: '#D1D5DB',
         labelColor: '#111827',
         inputButtonBorderRadius: '0.375rem',
 
-        // Currency Settings
         defaultCurrencyCode: 'GBP',
         defaultCurrencySymbol: '£',
         defaultCurrencyDecimalPlaces: 2,
         defaultCurrencyThousandSeparator: ',',
         defaultCurrencyDecimalSeparator: '.',
         defaultCurrencyFormatTemplate: '{symbol}{amount}',
+
+        invoicePrefix: 'INV-', // From CompanySetting.invoiceSettings
+        nextInvoiceSeqNumber: 1, // From CompanySetting.invoiceSettings
+        defaultTaxRate: 0, // From CompanySetting.invoiceSettings
     });
 
-    // Local state for user profile and password/email changes
     const [userProfile, setUserProfile] = useState({
         contactPersonName: '',
-        email: '', // User's current email
-        newEmail: '', // For email change form
-        currentPassword: '', // For password/email change forms
-        newPassword: '', // For password change form
-        confirmNewPassword: '', // For password change form
+        email: '',
+        newEmail: '',
+        currentPassword: '',
+        newPassword: '',
+        confirmNewPassword: '',
     });
 
-    const [logoFile, setLogoFile] = useState(null); // For new logo upload
-    const [logoPreview, setLogoPreview] = useState(''); // For local logo preview
+    const [logoFile, setLogoFile] = useState(null);
+    const [logoPreview, setLogoPreview] = useState('');
 
-
-    // Options for currency selection dropdown
     const currencyOptions = [
         { value: 'GBP', label: 'GBP - British Pound (£)' },
         { value: 'USD', label: 'USD - US Dollar ($)' },
@@ -80,7 +75,6 @@ const SettingsPage = () => {
         { value: 'INR', label: 'INR - Indian Rupee (INR)' },
     ];
 
-    // Helper to get default currency properties based on code (for `handleCurrencyChange`)
     const currencyDefaults = useMemo(() => ({
         'GBP': { symbol: '£', decimalPlaces: 2, thousandSeparator: ',', decimalSeparator: '.', formatTemplate: '{symbol}{amount}' },
         'USD': { symbol: '$', decimalPlaces: 2, thousandSeparator: ',', decimalSeparator: '.', formatTemplate: '{symbol}{amount}' },
@@ -93,10 +87,9 @@ const SettingsPage = () => {
     }), []);
 
 
-    // Effect to fetch initial settings and user profile data
     useEffect(() => {
         const fetchSettingsAndProfile = async () => {
-            if (authLoading || !user) { // Wait for user to be loaded from AuthContext
+            if (authLoading || !user) {
                 setLoading(true);
                 return;
             }
@@ -104,27 +97,27 @@ const SettingsPage = () => {
             setLoading(true);
             setError(null);
             try {
-                // Fetch Company Settings
-                const settingsRes = await api.get('/settings'); // GET /api/settings
+                const settingsRes = await api.get('/settings');
                 const fetchedSettings = settingsRes.data;
 
-                // Fetch User Profile (from /auth/me)
                 const userProfileRes = await api.get('/auth/me');
                 const fetchedUserProfile = userProfileRes.data.user;
 
-                setSettings(fetchedSettings); // Store full fetched settings
+                setSettings(fetchedSettings);
 
-                // Populate localSettings state from fetched data
                 setLocalSettings(prev => ({
                     ...prev,
-                    companyName: fetchedSettings.company?.name || '', // Company name comes from populated company
+                    companyName: fetchedSettings.company?.name || '',
                     companyLogoUrl: fetchedSettings.companyLogoUrl || '',
-                    // Ensure address is always an object, even if fetchedSettings.address is null/undefined
-                    companyAddress: fetchedSettings.address || defaultAddress,
-                    companyPhone: fetchedSettings.phone || '',
-                    companyEmail: fetchedSettings.email || '',
-                    companyWebsite: fetchedSettings.website || '',
-                    companyTaxId: fetchedSettings.taxId || '',
+                    defaultFormName: fetchedSettings.defaultFormName || '',
+                    // --- FIXES START HERE ---
+                    // Access nested company settings for initial display
+                    companyAddress: fetchedSettings.company?.settings?.address || defaultAddress,
+                    companyPhone: fetchedSettings.company?.settings?.phone || '',
+                    companyEmail: fetchedSettings.company?.settings?.email || '',
+                    companyWebsite: fetchedSettings.company?.settings?.website || '',
+                    companyTaxId: fetchedSettings.company?.settings?.taxId || '', // Corrected path
+                    // --- FIXES END HERE ---
                     
                     backgroundColor: fetchedSettings.backgroundColor || '#FFFFFF',
                     primaryColor: fetchedSettings.primaryColor || '#3B82F6',
@@ -138,16 +131,18 @@ const SettingsPage = () => {
                     defaultCurrencyThousandSeparator: fetchedSettings.defaultCurrency?.thousandSeparator || ',',
                     defaultCurrencyDecimalSeparator: fetchedSettings.defaultCurrency?.decimalSeparator || '.',
                     defaultCurrencyFormatTemplate: fetchedSettings.defaultCurrency?.formatTemplate || '{symbol}{amount}',
+
+                    invoicePrefix: fetchedSettings.invoiceSettings?.invoicePrefix || 'INV-',
+                    nextInvoiceSeqNumber: fetchedSettings.invoiceSettings?.nextInvoiceSeqNumber || 1,
+                    defaultTaxRate: fetchedSettings.invoiceSettings?.defaultTaxRate || 0,
                 }));
 
-                // Populate userProfile state from fetched data
                 setUserProfile(prev => ({
                     ...prev,
                     contactPersonName: fetchedUserProfile.contactPersonName || '',
                     email: fetchedUserProfile.email || '',
                 }));
 
-                // If a logo URL exists, set it for preview
                 if (fetchedSettings.companyLogoUrl) {
                     setLogoPreview(fetchedSettings.companyLogoUrl);
                 }
@@ -161,41 +156,36 @@ const SettingsPage = () => {
         };
 
         fetchSettingsAndProfile();
-    }, [user, authLoading]); // Re-run when user or authLoading changes
+    }, [user, authLoading, defaultAddress]);
 
-
-    // Handler for changes in company details or UI styling (flat fields in localSettings)
     const handleLocalSettingsChange = useCallback((e) => {
         const { name, value, type } = e.target;
         setLocalSettings(prev => ({
             ...prev,
-            [name]: type === 'number' ? parseFloat(value) : value // Parse numbers
+            [name]: type === 'number' ? parseFloat(value) : value
         }));
     }, []);
 
-    // Handler for changes in company address (uses AddressInput's onChange callback)
     const handleCompanyAddressChange = useCallback((newAddressObject) => {
         setLocalSettings(prev => ({ ...prev, companyAddress: newAddressObject }));
     }, []);
 
-    // Handler for logo file selection
     const handleLogoFileChange = (e) => {
         const file = e.target.files[0];
         if (file) {
             setLogoFile(file);
-            setLogoPreview(URL.createObjectURL(file)); // Create a local URL for preview
+            setLogoPreview(URL.createObjectURL(file));
         }
     };
 
-    // Handler for currency setting changes (updates local currencyPreferences state)
     const handleCurrencyChange = useCallback((e) => {
         const { name, value, type } = e.target;
         setLocalSettings(prev => {
             let newSettings = { ...prev };
-            const parsedValue = type === 'number' ? parseInt(value, 10) : value; // Ensure integer for decimalPlaces
+            const parsedValue = type === 'number' ? parseInt(value, 10) : value;
 
             if (name === 'defaultCurrencyCode') {
-                const defaults = currencyDefaults[parsedValue] || currencyDefaults['GBP']; // Get symbol/format based on code
+                const defaults = currencyDefaults[parsedValue] || currencyDefaults['GBP'];
                 newSettings.defaultCurrencyCode = parsedValue;
                 newSettings.defaultCurrencySymbol = defaults.symbol;
                 newSettings.defaultCurrencyDecimalPlaces = defaults.decimalPlaces;
@@ -207,18 +197,23 @@ const SettingsPage = () => {
             }
             return newSettings;
         });
-    }, [currencyDefaults]); // Dependency on memoized currencyDefaults
+    }, [currencyDefaults]);
 
-    // Handler for changes in user profile details
+    const handleInvoiceSettingsChange = useCallback((e) => {
+        const { name, value, type } = e.target;
+        setLocalSettings(prev => ({
+            ...prev,
+            [name]: type === 'number' && name === 'defaultTaxRate' ? parseFloat(value) / 100 :
+                    type === 'number' ? parseFloat(value) : value
+        }));
+    }, []);
+
     const handleUserProfileChange = useCallback((e) => {
         const { name, value } = e.target;
         setUserProfile(prev => ({ ...prev, [name]: value }));
     }, []);
 
 
-    // --- Form Submission Handlers ---
-
-    // Handles saving Company Details and UI Styling Overrides
     const handleSaveCompanySettings = async (e) => {
         e.preventDefault();
         setSaving(true);
@@ -231,16 +226,15 @@ const SettingsPage = () => {
             return;
         }
 
-        let uploadedLogoUrl = localSettings.companyLogoUrl; // Start with current URL
+        let uploadedLogoUrl = localSettings.companyLogoUrl;
 
-        // Upload new logo file if selected
         if (logoFile) {
             const formData = new FormData();
             formData.append('logo', logoFile);
 
             try {
                 const uploadRes = await api.post('/uploads/upload-logo', formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }, // Important for file uploads
+                    headers: { 'Content-Type': 'multipart/form-data' },
                 });
                 uploadedLogoUrl = uploadRes.data.logoUrl;
             } catch (err) {
@@ -253,7 +247,6 @@ const SettingsPage = () => {
 
         try {
             const payload = {
-                // Properties that map directly to CompanySetting model
                 companyLogoUrl: uploadedLogoUrl,
                 defaultFormName: localSettings.defaultFormName,
                 backgroundColor: localSettings.backgroundColor,
@@ -262,7 +255,6 @@ const SettingsPage = () => {
                 labelColor: localSettings.labelColor,
                 inputButtonBorderRadius: localSettings.inputButtonBorderRadius,
                 
-                // Nested defaultCurrency object
                 defaultCurrency: {
                     code: localSettings.defaultCurrencyCode,
                     symbol: localSettings.defaultCurrencySymbol,
@@ -272,39 +264,49 @@ const SettingsPage = () => {
                     formatTemplate: localSettings.defaultCurrencyFormatTemplate,
                 },
 
-                // Properties that map to Company model (passed separately in payload)
-                name: localSettings.companyName, // For Company.name
-                address: localSettings.companyAddress, // For Company.address
-                phone: localSettings.companyPhone, // For Company.phone
-                email: localSettings.companyEmail, // For Company.email
-                website: localSettings.companyWebsite, // For Company.website
-                taxId: localSettings.companyTaxId, // For Company.taxId
+                invoiceSettings: { // These are for the CompanySetting model
+                    invoicePrefix: localSettings.invoicePrefix,
+                    nextInvoiceSeqNumber: localSettings.nextInvoiceSeqNumber,
+                    defaultTaxRate: localSettings.defaultTaxRate,
+                },
+
+                // These are for the Company model (passed as top-level fields for backend processing)
+                name: localSettings.companyName,
+                address: localSettings.companyAddress, // This will be handled by backend to company.settings.address
+                phone: localSettings.companyPhone,     // This will be handled by backend to company.settings.phone
+                email: localSettings.companyEmail,     // This will be handled by backend to company.settings.email
+                website: localSettings.companyWebsite, // This will be handled by backend to company.settings.website
+                taxId: localSettings.companyTaxId,     // This will be handled by backend to company.settings.taxId
             };
 
-            // Send to backend (PUT /api/settings)
             const res = await api.put('/settings', payload);
             
-            // Update local state and context after successful save
-            setSettings(res.data.settings); // Update the main settings state from backend response
+            setSettings(res.data.settings); // Update the main settings state with the full response
+
             setLocalSettings(prev => ({
                 ...prev,
-                companyLogoUrl: uploadedLogoUrl, // Ensure logo URL is updated
-                companyName: res.data.settings.company.name, // Update company name from backend response
-                // Update other company details from backend response if they were sent/changed
-                companyAddress: res.data.settings.address || defaultAddress, // Ensure fallback here too
-                companyPhone: res.data.settings.phone,
-                companyEmail: res.data.settings.email,
-                companyWebsite: res.data.settings.website,
-                companyTaxId: res.data.settings.taxId,
+                companyLogoUrl: uploadedLogoUrl,
+                companyName: res.data.settings.company.name,
+                // --- FIXES START HERE ---
+                // Access nested company settings for displaying after save
+                companyAddress: res.data.settings.company?.settings?.address || defaultAddress,
+                companyPhone: res.data.settings.company?.settings?.phone || '',
+                companyEmail: res.data.settings.company?.settings?.email || '',
+                companyWebsite: res.data.settings.company?.settings?.website || '',
+                companyTaxId: res.data.settings.company?.settings?.taxId || '', // Corrected path
+                // --- FIXES END HERE ---
+                
+                // These are for the CompanySetting model, which are direct properties
+                invoicePrefix: res.data.settings.invoiceSettings?.invoicePrefix || 'INV-',
+                nextInvoiceSeqNumber: res.data.settings.invoiceSettings?.nextInvoiceSeqNumber || 1,
+                defaultTaxRate: res.data.settings.invoiceSettings?.defaultTaxRate || 0,
             }));
             setSuccessMessage('Company Settings updated successfully!');
-            setLogoFile(null); // Clear file input after successful upload
+            setLogoFile(null);
 
-            // Update AuthContext's user data for company name if it changed
             if (user && user.setUserData) {
                 user.setUserData(prev => ({ ...prev, company: { ...prev.company, name: res.data.settings.company.name } }));
             }
-            // Update CurrencyContext with the new default currency
             updateCurrency(res.data.settings.defaultCurrency);
 
         } catch (err) {
@@ -315,7 +317,6 @@ const SettingsPage = () => {
         }
     };
 
-    // Handles saving user profile details
     const handleSaveProfile = async (e) => {
         e.preventDefault();
         setSaving(true);
@@ -323,10 +324,8 @@ const SettingsPage = () => {
         setSuccessMessage(null);
 
         try {
-            // Only update contactPersonName in this endpoint
             const res = await api.put('/auth/profile', { contactPersonName: userProfile.contactPersonName });
             setSuccessMessage('Profile updated successfully!');
-            // Update AuthContext's user data
             if (user && user.setUserData) {
                 user.setUserData(prev => ({ ...prev, contactPersonName: res.data.user.contactPersonName }));
             }
@@ -338,7 +337,6 @@ const SettingsPage = () => {
         }
     };
 
-    // Handles changing user's password
     const handleChangePassword = async (e) => {
         e.preventDefault();
         setSaving(true);
@@ -396,7 +394,6 @@ const SettingsPage = () => {
         }
     };
 
-    // Handles changing user's email address
     const handleChangeEmail = async (e) => {
         e.preventDefault();
         setSaving(true);
@@ -495,7 +492,7 @@ const SettingsPage = () => {
                         type="button"
                         onClick={() => setActiveTab('company')}
                         className={`${activeTab === 'company' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-                        disabled={!canAccessCompanyCurrencySettings} // Disable if not admin
+                        disabled={!canAccessCompanyCurrencySettings}
                     >
                         Company Details
                     </button>
@@ -503,11 +500,10 @@ const SettingsPage = () => {
                         type="button"
                         onClick={() => setActiveTab('currency')}
                         className={`${activeTab === 'currency' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-                        disabled={!canAccessCompanyCurrencySettings} // Disable if not admin
+                        disabled={!canAccessCompanyCurrencySettings}
                     >
                         Currency Preferences
                     </button>
-                    {/* Removed Email Automation tab from this version */}
                     <button
                         type="button"
                         onClick={() => setActiveTab('my-account')}
@@ -521,7 +517,6 @@ const SettingsPage = () => {
             {/* Tab Content: Company Details */}
             {activeTab === 'company' && (
                 <form onSubmit={handleSaveCompanySettings} className="space-y-6">
-                    {/* Company Name */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <ModernInput
                             label="Company Name"
@@ -531,7 +526,6 @@ const SettingsPage = () => {
                             required
                         />
 
-                        {/* Company Logo Upload Section */}
                         <div className="col-span-1">
                             <label className="block text-sm font-medium text-gray-700 mb-1">Company Logo</label>
                             <div className="mt-1 flex items-center">
@@ -608,6 +602,42 @@ const SettingsPage = () => {
                         onChange={handleLocalSettingsChange}
                         placeholder="e.g., GB123456789"
                     />
+
+                    {/* NEW: Invoice Settings Section */}
+                    <h3 className="text-xl font-semibold text-gray-800 mt-4">Invoice Settings</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <ModernInput
+                            label="Invoice Prefix"
+                            name="invoicePrefix"
+                            value={localSettings.invoicePrefix}
+                            onChange={handleInvoiceSettingsChange}
+                            helpText="e.g., INV- will result in INV-0001"
+                        />
+                        <ModernInput
+                            label="Next Invoice Number"
+                            name="nextInvoiceSeqNumber"
+                            value={localSettings.nextInvoiceSeqNumber}
+                            onChange={handleInvoiceSettingsChange}
+                            type="number"
+                            min="1"
+                            helpText="The next sequential number to use for invoices (e.g., 1 for INV-0001)."
+                        />
+                        <ModernInput
+                            label="Default Tax Rate (%)"
+                            name="defaultTaxRate"
+                            value={localSettings.defaultTaxRate * 100}
+                            onChange={(e) => {
+                                const value = parseFloat(e.target.value);
+                                handleInvoiceSettingsChange({ target: { name: 'defaultTaxRate', value: value / 100 } });
+                            }}
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            helpText="Enter the default tax rate as a percentage (e.g., 20 for 20% VAT)."
+                        />
+                    </div>
+
 
                     <div className="flex justify-end mt-6">
                         <button

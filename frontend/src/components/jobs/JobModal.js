@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-// Adjusted import paths for components in 'common' folder
 import Modal from '../common/Modal';
 import ModernInput from '../common/ModernInput';
 import ModernSelect from '../common/ModernSelect';
 import AddressInput from '../common/AddressInput';
-
-import api from '../../utils/api'; // Path remains the same
-import { useMapsApi } from '../../App'; // Path remains the same
-import { isSameDay } from '../../utils/helpers'; // Path remains the same
-import { PlusIcon, MinusCircleIcon, XCircleIcon } from '@heroicons/react/20/solid'; // Path remains the same
+import api from '../../utils/api';
+import { useMapsApi } from '../../App';
+import { isSameDay } from '../../utils/helpers';
+import { PlusIcon, XCircleIcon } from '@heroicons/react/20/solid';
 
 const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], staff = [] }) => {
     const [formData, setFormData] = useState({
@@ -17,8 +15,8 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
         address: {}, notes: '', endDate: '',
         recurring: { pattern: 'none', endDate: '' }, createdBy: null,
         usedStockItems: [],
-        price: 0, // Initialized to 0
-        formTemplate: '', // NEW: Add formTemplate field
+        price: 0,
+        formTemplate: '',
     });
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState(null);
@@ -28,7 +26,7 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
     const [availableStock, setAvailableStock] = useState([]);
     const [selectedStockItemId, setSelectedStockItemId] = useState('');
     const [stockQuantityToAdd, setStockQuantityToAdd] = useState(1);
-    const [taskLists, setTaskLists] = useState([]); // NEW: State for fetched task lists
+    const [taskLists, setTaskLists] = useState([]);
 
     const { isMapsLoaded, isMapsLoadError } = useMapsApi();
 
@@ -67,7 +65,6 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
         ];
     }, [availableStock, formData.usedStockItems]);
 
-    // NEW: Memoized options for task lists dropdown
     const taskListOptions = useMemo(() => {
         return [
             { value: '', label: 'No Task List' },
@@ -122,13 +119,13 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
                     quantityUsed: item.quantityUsed
                 })) || [],
                 price: jobData?.price ?? 0,
-                formTemplate: jobData?.formTemplate || '', // NEW: Populate formTemplate from jobData
+                formTemplate: jobData?.formTemplate || '',
             });
             setFormError(null);
             setAvailabilityError(null);
             setSuccessMessage(null);
             fetchAvailableStock();
-            fetchTaskLists(); // NEW: Fetch task lists when modal opens
+            fetchTaskLists();
         }
     }, [isOpen, jobData, customers]);
 
@@ -142,14 +139,12 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
         }
     };
 
-    // NEW: Fetch task lists (forms with purpose 'reminder_task_list')
     const fetchTaskLists = async () => {
         try {
             const res = await api.get('/forms', { params: { purpose: 'reminder_task_list' } });
             setTaskLists(res.data);
         } catch (err) {
             console.error("Failed to fetch task lists:", err);
-            // Optionally set a formError if task lists are critical
         }
     };
 
@@ -306,7 +301,18 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
                 res = await api.post('/jobs', dataToSend);
                 setSuccessMessage('Job created successfully!');
             }
-            onSave(res.data.job);
+
+            // ✅ FIXED: Add the safety check before saving
+            if (res.data && res.data.job) {
+                onSave(res.data.job); // Only call onSave with a valid job object
+            } else {
+                // This is a fallback if the API doesn't return the job object.
+                // It calls onSave() without arguments to signal that the parent
+                // component should re-fetch all its data.
+                console.error("API response did not include job object. Triggering a full data refresh.");
+                onSave();
+            }
+
             setTimeout(() => onClose(), 1500);
         } catch (err) {
             const errorData = err.response?.data;
@@ -350,7 +356,6 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
                         <ModernInput label="Date" name="date" type="date" value={formData.date} onChange={handleChange} required />
                         <ModernInput label="Time" name="time" type="time" value={formData.time} onChange={handleChange} required />
                         <ModernInput label="Duration (minutes)" name="duration" type="number" value={formData.duration} onChange={handleChange} required min="5" step="5" />
-                        {/* Price input field */}
                         <ModernInput 
                             label="Price" 
                             name="price" 
@@ -366,16 +371,14 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
                     {formData.recurring.pattern !== 'none' && (
                         <ModernInput label="Repeat Until Date" name="recurringEndDate" type="date" value={formData.recurring.endDate || ''} onChange={handleChange} required helpText="The job will repeat according to the pattern until this date." />
                     )}
-                    {/* NEW: Task List Dropdown */}
                     <ModernSelect
                         label="Select Task List Template (Optional)"
-                        name="formTemplate" // Name matches the formTemplate field in Job model
+                        name="formTemplate"
                         value={formData.formTemplate}
                         onChange={handleChange}
-                        options={taskListOptions} // This will contain your 'reminder_task_list' forms
+                        options={taskListOptions}
                         helpText="Choose a task list from your Form Builder to auto-populate job tasks."
                     />
-                    {/* End NEW: Task List Dropdown */}
                     <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
                         <label className="block text-sm font-medium text-gray-700 mb-2">Assigned Staff</label>
                         {availabilityError && (
@@ -411,7 +414,6 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
                         </div>
                     </div>
 
-                    {/* Stock Items Section */}
                     <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
                         <label className="block text-sm font-medium text-gray-700 mb-2">Stock Items Used</label>
                         <div className="flex items-end space-x-2 mb-4">
@@ -478,10 +480,3 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
 };
 
 export default JobModal;
-
-
-
-
-
-
-

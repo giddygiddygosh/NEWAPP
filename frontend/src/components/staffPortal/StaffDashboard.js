@@ -1,18 +1,32 @@
 // src/components/staffPortal/StaffDashboard.jsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react'; // CORRECTED LINE HERE
 import { useAuth } from '../context/AuthContext';
 import api from '../../utils/api';
 import Loader from '../common/Loader';
-import { MapPin, Clock, CheckCircle2, XCircle, ChevronRight, Gps } from 'lucide-react';
+import { MapPin, Clock, CheckCircle2, XCircle, ChevronRight, Gps, CalendarDays, BriefcaseMedical } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { format } from 'date-fns';
 
 import StaffJobCard from './StaffJobCard';
+import StaffAbsenceRequestModal from './StaffAbsenceRequestModal'; 
+import { toast } from 'react-toastify';
 
 const StaffDashboard = () => {
     const { user, logout } = useAuth();
     const [assignedJobs, setAssignedJobs] = useState([]);
     const [isLoadingJobs, setIsLoadingJobs] = useState(true);
     const [fetchError, setFetchError] = useState(null);
+
+    // State for absence request modal
+    const [isAbsenceModalOpen, setIsAbsenceModalOpen] = useState(false);
+    const [absenceRequestType, setAbsenceRequestType] = useState('Holiday');
+
+    // NEW: State for staff's own absence requests
+    const [myAbsenceRequests, setMyAbsenceRequests] = useState([]);
+    const [isLoadingMyAbsences, setIsLoadingMyAbsences] = useState(true);
+    const [myAbsencesError, setMyAbsencesError] = useState(null);
+
 
     const fetchAssignedJobs = useCallback(async () => {
         setIsLoadingJobs(true);
@@ -27,8 +41,6 @@ const StaffDashboard = () => {
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
 
-            console.log("DEBUG: Fetching jobs for staffId:", user.staff._id, "from", today, "to", tomorrow.toISOString().split('T')[0]);
-
             const res = await api.get('/jobs', {
                 params: {
                     staffId: user.staff._id,
@@ -38,13 +50,10 @@ const StaffDashboard = () => {
             });
 
             const initialFilteredJobs = res.data
-                .filter(job => job != null && job._id && job.status !== 'Completed' && job.status !== 'Cancelled') // Added job._id check here
+                .filter(job => job != null && job._id && job.status !== 'Completed' && job.status !== 'Cancelled')
                 .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 
             setAssignedJobs(initialFilteredJobs);
-            console.log("DEBUG: Fetched Jobs Response Data:", res.data);
-            console.log("DEBUG: Filtered and Assigned Jobs:", initialFilteredJobs);
-
         } catch (err) {
             console.error("DEBUG ERROR: Error fetching assigned jobs for Staff Dashboard:", err);
             setFetchError(err.response?.data?.message || err.message || "Failed to load your assigned jobs. Check network.");
@@ -53,42 +62,58 @@ const StaffDashboard = () => {
         }
     }, [user]);
 
+    // NEW: Fetch staff's own absence requests
+    const fetchMyAbsenceRequests = useCallback(async () => {
+        setIsLoadingMyAbsences(true);
+        setMyAbsencesError(null);
+        try {
+            if (!user?.staff?._id) {
+                setMyAbsencesError("Staff profile not available. Cannot fetch absence requests.");
+                setIsLoadingMyAbsences(false);
+                return;
+            }
+            // Use the getStaffAbsences endpoint
+            const res = await api.get(`/staff/${user.staff._id}/absences`);
+            setMyAbsenceRequests(res.data);
+            console.log("My Absence Requests:", res.data);
+        } catch (err) {
+            setMyAbsencesError(err.response?.data?.message || err.message || "Failed to load your absence requests.");
+            console.error("Error fetching my absence requests:", err);
+        } finally {
+            setIsLoadingMyAbsences(false);
+        }
+    }, [user]);
+
     useEffect(() => {
         if (user?.staff?._id) {
             fetchAssignedJobs();
+            fetchMyAbsenceRequests(); // Call new fetch function
         }
-    }, [user, fetchAssignedJobs]);
+    }, [user, fetchAssignedJobs, fetchMyAbsenceRequests]);
 
-    // This is the CRUCIAL handler for real-time updates
     const handleJobUpdatedInCard = useCallback((updatedJob) => {
         setAssignedJobs(prevJobs => {
-            // Ensure updatedJob itself is valid before proceeding
             if (!updatedJob || !updatedJob._id) {
                 console.warn("handleJobUpdatedInCard received an invalid updatedJob:", updatedJob);
-                return prevJobs; // Return previous state if update is invalid
+                return prevJobs;
             }
 
-            // Step 1: Ensure array is clean and entries have an _id
             const cleanedPrevJobs = prevJobs.filter(job => job != null && job._id);
 
-            // Step 2: Create a new list where the updated job replaces the old one (if found)
             const updatedList = cleanedPrevJobs.map(job => {
-                // Defensive check here as well, though cleanedPrevJobs should ensure job._id exists
                 if (job._id === updatedJob._id) {
-                    return updatedJob; // Replace the old job object with the new one
+                    return updatedJob;
                 }
-                return job; // Keep other jobs as they are
+                return job;
             });
 
-            // Step 3: Filter out any jobs that are now 'Completed' or 'Cancelled'
             const finalFilteredList = updatedList.filter(job =>
                 job.status !== 'Completed' && job.status !== 'Cancelled'
             );
 
-            console.log("DEBUG: handleJobUpdatedInCard - Final filtered list:", finalFilteredList);
             return finalFilteredList;
         });
-        setFetchError(null); // Clear any previous action error on successful update
+        setFetchError(null);
     }, []);
 
     const handleJobActionError = useCallback((err) => {
@@ -101,6 +126,44 @@ const StaffDashboard = () => {
         setTimeout(() => setFetchError(null), 5000);
     }, []);
 
+    const openAbsenceModal = useCallback((type) => {
+        setAbsenceRequestType(type);
+        setIsAbsenceModalOpen(true);
+    }, []);
+
+    const closeAbsenceModal = useCallback(() => {
+        setIsAbsenceModalOpen(false);
+        setAbsenceRequestType('Holiday');
+    }, []);
+
+    const handleSaveAbsenceRequest = useCallback(async (formData) => {
+        try {
+            const res = await api.post(`/staff/${formData.staff}/absences`, formData);
+            toast.success("Absence request submitted successfully!");
+            console.log("Absence request submitted:", res.data);
+            fetchMyAbsenceRequests(); // Refresh staff's own absence list after submission
+        } catch (err) {
+            const errorMessage = err.response?.data?.message || err.message || "Failed to submit absence request.";
+            toast.error(`Error: ${errorMessage}`);
+            throw new Error(errorMessage);
+        }
+    }, [fetchMyAbsenceRequests]);
+
+    // Helper for status classes (copied from StaffAbsenceView for consistency)
+    const getStatusClasses = (status) => {
+        switch (status) {
+            case 'Pending':
+                return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+            case 'Approved':
+                return 'bg-green-100 text-green-800 border-green-200';
+            case 'Rejected':
+                return 'bg-red-100 text-red-800 border-red-200';
+            case 'Cancelled':
+                return 'bg-gray-100 text-gray-800 border-gray-200';
+            default:
+                return 'bg-blue-100 text-blue-800 border-blue-200';
+        }
+    };
 
     if (!user || user.loading || !user.staff) {
         return (
@@ -148,8 +211,7 @@ const StaffDashboard = () => {
                     ) : (
                         <div className="space-y-4">
                             {assignedJobs.map(job => (
-                                // This guard ensures 'job' is not undefined before rendering the card
-                                job && job._id ? ( // Line 70 is inside this ternary
+                                job && job._id ? (
                                     <StaffJobCard
                                         key={job._id}
                                         job={job}
@@ -166,17 +228,26 @@ const StaffDashboard = () => {
                     )}
                 </div>
 
-                {/* Other Feature Cards (unchanged) */}
                 <div className="bg-green-50 border border-green-200 rounded-lg p-6 shadow-sm">
                     <h3 className="text-xl font-semibold text-green-800 mb-2">My Schedule</h3>
                     <p className="text-green-700">See your upcoming appointments and daily routes.</p>
-                    <button className="mt-4 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">View Schedule</button>
+                    <Link
+                        to="/staff-schedule"
+                        className="mt-4 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors shadow-md block text-center"
+                    >
+                        View Schedule
+                    </Link>
                 </div>
 
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 shadow-sm">
                     <h3 className="text-xl font-semibold text-yellow-800 mb-2">Holiday & Leave</h3>
                     <p className="text-yellow-700">Request time off or view your holiday allowance.</p>
-                    <button className="mt-4 px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700">Request Holiday</button>
+                    <button
+                        onClick={() => openAbsenceModal('Holiday')}
+                        className="mt-4 px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors shadow-md"
+                    >
+                        Request Holiday
+                    </button>
                 </div>
 
                 <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 shadow-sm opacity-60 cursor-not-allowed">
@@ -185,12 +256,64 @@ const StaffDashboard = () => {
                     <button disabled className="mt-4 px-4 py-2 bg-purple-400 text-white rounded-md">View Payslips</button>
                 </div>
 
-                <div className="bg-red-50 border border-red-200 rounded-lg p-6 shadow-sm opacity-60 cursor-not-allowed">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-6 shadow-sm">
                     <h3 className="text-xl font-semibold text-red-800 mb-2">Report Sick Day</h3>
-                    <p className="text-red-700">Notify management of a sick day. (Coming Soon)</p>
-                    <button disabled className="mt-4 px-4 py-2 bg-red-400 text-white rounded-md">Report Sick Day</button>
+                    <p className="text-red-700">Notify management of a sick day.</p>
+                    <button
+                        onClick={() => openAbsenceModal('Sick')}
+                        className="mt-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors shadow-md"
+                    >
+                        Report Sick Day
+                    </button>
                 </div>
             </div>
+
+            {/* NEW: Section to display staff's own absence requests */}
+            <div className="mt-10 bg-white rounded-lg shadow-xl p-6 border-t border-gray-200">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <BriefcaseMedical size={24} /> Your Absence Requests
+                </h3>
+                {isLoadingMyAbsences ? (
+                    <div className="text-gray-700 text-center flex items-center justify-center">
+                        <Loader className="animate-spin inline-block mr-2" />
+                        <span>Loading your absence requests...</span>
+                    </div>
+                ) : myAbsencesError ? (
+                    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg text-sm text-center">
+                        {myAbsencesError}
+                    </div>
+                ) : myAbsenceRequests.length === 0 ? (
+                    <p className="text-gray-700 text-center">You have no absence requests submitted.</p>
+                ) : (
+                    <div className="space-y-4">
+                        {myAbsenceRequests.map(request => (
+                            <div key={request._id} className={`p-4 rounded-md border ${getStatusClasses(request.status).replace('bg-', 'bg-opacity-5 bg-')}`}>
+                                <p className="font-semibold text-lg">{request.type}</p>
+                                <p className="text-sm text-gray-600">
+                                    {format(new Date(request.start), 'dd/MM/yyyy')} to {format(new Date(request.end), 'dd/MM/yyyy')}
+                                </p>
+                                {request.reason && <p className="text-sm text-gray-600 italic">Request Reason: {request.reason}</p>}
+                                <p className={`text-sm font-semibold mt-1 ${getStatusClasses(request.status).replace('bg-', 'text-')}`}>
+                                    Status: {request.status}
+                                </p>
+                                {request.resolutionReason && (
+                                    <p className="text-sm text-gray-700 mt-1">Admin Note: {request.resolutionReason}</p>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {isAbsenceModalOpen && user?.staff?._id && (
+                <StaffAbsenceRequestModal
+                    isOpen={isAbsenceModalOpen}
+                    onClose={closeAbsenceModal}
+                    onSave={handleSaveAbsenceRequest}
+                    initialType={absenceRequestType}
+                    staffId={user.staff._id}
+                />
+            )}
         </div>
     );
 };

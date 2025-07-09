@@ -33,6 +33,14 @@ const AbsenceSchema = new mongoose.Schema({
         trim: true,
         default: '',
     },
+    // --- NEW FIELD FOR APPROVAL WORKFLOW ---
+    status: {
+        type: String,
+        enum: ['Pending', 'Approved', 'Rejected', 'Cancelled'], // Added 'Cancelled' for completeness
+        default: 'Pending', // New requests should start as 'Pending'
+        required: true,
+    },
+    // --- END NEW FIELD ---
     createdAt: {
         type: Date,
         default: Date.now,
@@ -47,5 +55,11 @@ AbsenceSchema.pre('save', function(next) {
     this.updatedAt = Date.now();
     next();
 });
+
+// If you also use findByIdAndUpdate or findOneAndUpdate, you might want a pre-update hook:
+AbsenceSchema.pre('findOneAndUpdate', function() {
+    this.set({ updatedAt: new Date() });
+});
+
 
 module.exports = mongoose.models.Absence || mongoose.model('Absence', AbsenceSchema);

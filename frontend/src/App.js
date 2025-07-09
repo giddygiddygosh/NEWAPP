@@ -28,6 +28,9 @@ import StaffAbsencePage from './components/staff/StaffAbsencePage';
 import InvoicePage from './components/invoices/InvoicePage';
 import InvoiceDetails from './components/invoices/InvoiceDetails'; // NEW: Import the InvoiceDetails component
 
+// NEW: Import StaffSchedulePage
+import StaffSchedulePage from './components/staffPortal/StaffSchedulePage';
+
 
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -131,6 +134,8 @@ function AppContent() {
                         {/* Private Routes */}
                         <Route path="/customer-portal" element={<PrivateRoute roles={['customer']}><CustomerDashboard /></PrivateRoute>} />
                         <Route path="/staff-dashboard" element={<PrivateRoute roles={['staff', 'manager']}><StaffDashboard /></PrivateRoute>} />
+                        {/* NEW: Staff Schedule Page Route */}
+                        <Route path="/staff-schedule" element={<PrivateRoute roles={['staff', 'manager', 'admin']}><StaffSchedulePage /></PrivateRoute>} />
                         <Route path="/dashboard" element={<PrivateRoute roles={['admin', 'manager']}><Dashboard /></PrivateRoute>} />
                         <Route path="/customers" element={<PrivateRoute roles={['admin', 'manager']}><CustomerPage /></PrivateRoute>} />
                         <Route path="/leads" element={<PrivateRoute roles={['admin', 'manager', 'staff']}><LeadsView /></PrivateRoute>} />

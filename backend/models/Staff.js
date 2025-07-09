@@ -13,14 +13,27 @@ const UnavailabilityPeriodSchema = new mongoose.Schema({
     type: {
         type: String,
         required: true,
-        enum: ['Holiday', 'Sick', 'Training', 'Appointment', 'Other'],
+        enum: ['Holiday', 'Sick', 'Training', 'Appointment', 'Other', 'Emergency Holiday'],
         default: 'Other',
     },
-    reason: {
+    reason: { // Staff's reason for the request
         type: String,
         trim: true,
     },
-});
+    status: {
+        type: String,
+        enum: ['Pending', 'Approved', 'Rejected', 'Cancelled'],
+        default: 'Pending',
+        required: true,
+    },
+    // --- NEW FIELD: Admin's reason for approval/rejection ---
+    resolutionReason: { // Reason provided by admin for Approved/Rejected status
+        type: String,
+        trim: true,
+        default: '',
+    },
+    // --- END NEW FIELD ---
+}, { timestamps: true }); // Ensure timestamps are active for these subdocuments too if you need them
 
 const StaffSchema = new mongoose.Schema({
     company: {
@@ -36,7 +49,7 @@ const StaffSchema = new mongoose.Schema({
     email: {
         type: String,
         required: [true, 'Email is required'],
-        unique: true, // Email should remain unique
+        unique: true,
         trim: true,
         lowercase: true,
     },
@@ -59,11 +72,8 @@ const StaffSchema = new mongoose.Schema({
     employeeId: {
         type: String,
         trim: true,
-        // THIS LINE MUST BE COMPLETELY REMOVED OR COMMENTED OUT:
-        // unique: true, 
-        sparse: true, // Keep sparse to avoid indexing missing fields, but it won't enforce uniqueness on nulls anymore.
+        sparse: true,
     },
-    // This is the critical part: an array of absence periods embedded in the staff document
     unavailabilityPeriods: {
         type: [UnavailabilityPeriodSchema],
         default: [],

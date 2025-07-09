@@ -26,14 +26,12 @@ const UnavailabilityPeriodSchema = new mongoose.Schema({
         default: 'Pending',
         required: true,
     },
-    // --- NEW FIELD: Admin's reason for approval/rejection ---
     resolutionReason: { // Reason provided by admin for Approved/Rejected status
         type: String,
         trim: true,
         default: '',
     },
-    // --- END NEW FIELD ---
-}, { timestamps: true }); // Ensure timestamps are active for these subdocuments too if you need them
+}, { timestamps: true });
 
 const StaffSchema = new mongoose.Schema({
     company: {
@@ -77,8 +75,36 @@ const StaffSchema = new mongoose.Schema({
     unavailabilityPeriods: {
         type: [UnavailabilityPeriodSchema],
         default: [],
-        select: false, // Hide from default queries unless explicitly requested
+        select: false,
     },
+    // --- NEW FIELDS FOR PAYROLL ---
+    payRateType: {
+        type: String,
+        enum: ['Hourly', 'Fixed per Job', 'Percentage per Job', 'Daily Rate'], // Added 'Daily Rate' for daily clock-in/out
+        default: 'Hourly', // Set a reasonable default
+    },
+    hourlyRate: {
+        type: Number,
+        min: 0,
+        default: 0,
+    },
+    jobFixedAmount: {
+        type: Number,
+        min: 0,
+        default: 0,
+    },
+    jobPercentage: {
+        type: Number,
+        min: 0,
+        max: 100, // Assuming 0-100%
+        default: 0,
+    },
+    dailyClockInThresholdMins: { // For 'Daily Rate' type, e.g., if they clock in/out for >= 480 mins, count as full day
+        type: Number,
+        min: 0,
+        default: 480, // Default to 8 hours for a full day (8 * 60 minutes)
+    }
+    // --- END NEW FIELDS ---
 }, {
     timestamps: true,
 });

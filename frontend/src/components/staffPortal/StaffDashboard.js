@@ -1,12 +1,12 @@
 // src/components/staffPortal/StaffDashboard.jsx
 
-import React, { useState, useEffect, useCallback } from 'react'; // CORRECTED LINE HERE
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../../utils/api';
 import Loader from '../common/Loader';
-import { MapPin, Clock, CheckCircle2, XCircle, ChevronRight, Gps, CalendarDays, BriefcaseMedical } from 'lucide-react';
+import { MapPin, Clock, CheckCircle2, XCircle, ChevronRight, Gps, CalendarDays, BriefcaseMedical, LogIn, LogOut } from 'lucide-react'; // Added LogIn, LogOut icons
 import { Link } from 'react-router-dom';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns'; // Added isValid
 
 import StaffJobCard from './StaffJobCard';
 import StaffAbsenceRequestModal from './StaffAbsenceRequestModal'; 
@@ -22,10 +22,21 @@ const StaffDashboard = () => {
     const [isAbsenceModalOpen, setIsAbsenceModalOpen] = useState(false);
     const [absenceRequestType, setAbsenceRequestType] = useState('Holiday');
 
-    // NEW: State for staff's own absence requests
+    // State for staff's own absence requests
     const [myAbsenceRequests, setMyAbsenceRequests] = useState([]);
     const [isLoadingMyAbsences, setIsLoadingMyAbsences] = useState(true);
     const [myAbsencesError, setMyAbsencesError] = useState(null);
+
+    // NEW STATES FOR DAILY CLOCK-IN/OUT
+    const [dailyStatus, setDailyStatus] = useState({
+        isClockedIn: false,
+        clockInTime: null,
+        clockOutTime: null,
+        totalMinutes: 0,
+        recordId: null,
+    });
+    const [isLoadingDailyStatus, setIsLoadingDailyStatus] = useState(true);
+    const [dailyActionLoading, setDailyActionLoading] = useState(null); // 'clockIn', 'clockOut'
 
 
     const fetchAssignedJobs = useCallback(async () => {
@@ -62,7 +73,6 @@ const StaffDashboard = () => {
         }
     }, [user]);
 
-    // NEW: Fetch staff's own absence requests
     const fetchMyAbsenceRequests = useCallback(async () => {
         setIsLoadingMyAbsences(true);
         setMyAbsencesError(null);
@@ -72,10 +82,8 @@ const StaffDashboard = () => {
                 setIsLoadingMyAbsences(false);
                 return;
             }
-            // Use the getStaffAbsences endpoint
             const res = await api.get(`/staff/${user.staff._id}/absences`);
             setMyAbsenceRequests(res.data);
-            console.log("My Absence Requests:", res.data);
         } catch (err) {
             setMyAbsencesError(err.response?.data?.message || err.message || "Failed to load your absence requests.");
             console.error("Error fetching my absence requests:", err);
@@ -84,12 +92,36 @@ const StaffDashboard = () => {
         }
     }, [user]);
 
+    // NEW: Fetch current daily clock-in/out status
+    const fetchDailyStatus = useCallback(async () => {
+        setIsLoadingDailyStatus(true);
+        try {
+            if (!user?.staff?._id) {
+                setDailyStatus({ isClockedIn: false, clockInTime: null, clockOutTime: null, totalMinutes: 0, recordId: null });
+                setIsLoadingDailyStatus(false);
+                return;
+            }
+            const res = await api.get(`/daily-time/status/${user.staff._id}`);
+            setDailyStatus(res.data);
+            console.log("Daily Status Fetched:", res.data);
+        } catch (err) {
+            console.error("Error fetching daily status:", err);
+            toast.error("Failed to load daily clock status.");
+            setDailyStatus({ isClockedIn: false, clockInTime: null, clockOutTime: null, totalMinutes: 0, recordId: null }); // Reset on error
+        } finally {
+            setIsLoadingDailyStatus(false);
+        }
+    }, [user]);
+
+
     useEffect(() => {
         if (user?.staff?._id) {
             fetchAssignedJobs();
-            fetchMyAbsenceRequests(); // Call new fetch function
+            fetchMyAbsenceRequests();
+            fetchDailyStatus(); // Call new fetch function
         }
-    }, [user, fetchAssignedJobs, fetchMyAbsenceRequests]);
+    }, [user, fetchAssignedJobs, fetchMyAbsenceRequests, fetchDailyStatus]);
+
 
     const handleJobUpdatedInCard = useCallback((updatedJob) => {
         setAssignedJobs(prevJobs => {
@@ -140,7 +172,6 @@ const StaffDashboard = () => {
         try {
             const res = await api.post(`/staff/${formData.staff}/absences`, formData);
             toast.success("Absence request submitted successfully!");
-            console.log("Absence request submitted:", res.data);
             fetchMyAbsenceRequests(); // Refresh staff's own absence list after submission
         } catch (err) {
             const errorMessage = err.response?.data?.message || err.message || "Failed to submit absence request.";
@@ -148,6 +179,38 @@ const StaffDashboard = () => {
             throw new Error(errorMessage);
         }
     }, [fetchMyAbsenceRequests]);
+
+    // NEW: Clock In/Out Daily Handlers
+    const handleClockInDaily = useCallback(async () => {
+        setDailyActionLoading('clockIn');
+        try {
+            const res = await api.post('/daily-time/clock-in', { staffId: user.staff._id });
+            toast.success(res.data.message);
+            fetchDailyStatus(); // Refresh status after action
+        } catch (err) {
+            const errorMessage = err.response?.data?.message || err.message || "Failed to clock in.";
+            toast.error(`Error: ${errorMessage}`);
+            console.error("Error clocking in daily:", err);
+        } finally {
+            setDailyActionLoading(null);
+        }
+    }, [user, fetchDailyStatus]);
+
+    const handleClockOutDaily = useCallback(async () => {
+        setDailyActionLoading('clockOut');
+        try {
+            const res = await api.post('/daily-time/clock-out', { staffId: user.staff._id });
+            toast.success(res.data.message);
+            fetchDailyStatus(); // Refresh status after action
+        } catch (err) {
+            const errorMessage = err.response?.data?.message || err.message || "Failed to clock out.";
+            toast.error(`Error: ${errorMessage}`);
+            console.error("Error clocking out daily:", err);
+        } finally {
+            setDailyActionLoading(null);
+        }
+    }, [user, fetchDailyStatus]);
+
 
     // Helper for status classes (copied from StaffAbsenceView for consistency)
     const getStatusClasses = (status) => {
@@ -164,6 +227,13 @@ const StaffDashboard = () => {
                 return 'bg-blue-100 text-blue-800 border-blue-200';
         }
     };
+
+    const formatTime = (timeString) => {
+        if (!timeString) return 'N/A';
+        const date = new Date(timeString);
+        return isValid(date) ? format(date, 'hh:mm a') : 'Invalid Date';
+    };
+
 
     if (!user || user.loading || !user.staff) {
         return (
@@ -197,6 +267,60 @@ const StaffDashboard = () => {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* NEW: Daily Clock-in/out Section */}
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 shadow-sm col-span-full">
+                    <h3 className="text-xl font-semibold text-purple-800 mb-4 flex items-center gap-2">
+                        <Clock size={24} /> Daily Clock-in / Clock-out
+                    </h3>
+                    {isLoadingDailyStatus ? (
+                        <div className="text-purple-700 text-center flex items-center justify-center">
+                            <Loader className="animate-spin inline-block mr-2" />
+                            <span>Loading daily status...</span>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col sm:flex-row items-center justify-between">
+                            <div className="text-lg text-gray-700 mb-3 sm:mb-0">
+                                <p className="font-medium">Status:
+                                    <span className={`ml-2 font-semibold ${dailyStatus.isClockedIn ? 'text-green-600' : 'text-red-600'}`}>
+                                        {dailyStatus.isClockedIn ? 'Clocked In' : 'Clocked Out'}
+                                    </span>
+                                </p>
+                                {dailyStatus.clockInTime && (
+                                    <p className="text-sm">Clock In: {formatTime(dailyStatus.clockInTime)}</p>
+                                )}
+                                {dailyStatus.clockOutTime && (
+                                    <p className="text-sm">Clock Out: {formatTime(dailyStatus.clockOutTime)}</p>
+                                )}
+                                {dailyStatus.totalMinutes > 0 && (
+                                    <p className="text-sm">Total Today: {dailyStatus.totalMinutes} mins</p>
+                                )}
+                            </div>
+                            <div className="flex gap-3">
+                                {!dailyStatus.isClockedIn && (
+                                    <button
+                                        onClick={handleClockInDaily}
+                                        disabled={dailyActionLoading === 'clockIn'}
+                                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                                    >
+                                        {dailyActionLoading === 'clockIn' ? <Loader className="animate-spin mr-2" size={18} /> : <LogIn size={18} className="mr-2" />}
+                                        Clock In
+                                    </button>
+                                )}
+                                {dailyStatus.isClockedIn && (
+                                    <button
+                                        onClick={handleClockOutDaily}
+                                        disabled={dailyActionLoading === 'clockOut'}
+                                        className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                                    >
+                                        {dailyActionLoading === 'clockOut' ? <Loader className="animate-spin mr-2" size={18} /> : <LogOut size={18} className="mr-2" />}
+                                        Clock Out
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 shadow-sm col-span-full">
                     <h3 className="text-xl font-semibold text-blue-800 mb-4 flex items-center gap-2">
                         <MapPin size={24} /> Your Assigned Jobs (Today/Tomorrow)
@@ -268,7 +392,6 @@ const StaffDashboard = () => {
                 </div>
             </div>
 
-            {/* NEW: Section to display staff's own absence requests */}
             <div className="mt-10 bg-white rounded-lg shadow-xl p-6 border-t border-gray-200">
                 <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <BriefcaseMedical size={24} /> Your Absence Requests

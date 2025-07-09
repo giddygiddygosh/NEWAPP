@@ -33,6 +33,13 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
         role: initialData?.role || 'staff',
         employeeId: initialData?.employeeId || '',
         salesPersonName: initialData?.salesPersonName || '', // Common with lead/customer
+        // --- NEW STAFF PAYROLL FIELDS INITIALIZATION ---
+        payRateType: initialData?.payRateType || 'Hourly',
+        hourlyRate: initialData?.hourlyRate || 0,
+        jobFixedAmount: initialData?.jobFixedAmount || 0,
+        jobPercentage: initialData?.jobPercentage || 0,
+        dailyClockInThresholdMins: initialData?.dailyClockInThresholdMins || 480,
+        // --- END NEW STAFF PAYROLL FIELDS ---
     });
 
     const [saving, setSaving] = useState(false);
@@ -74,11 +81,20 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
         { value: 'Other', label: 'Other' },
     ];
 
-    const payTypeOptions = [
+    const payTypeOptions = [ // For customer service addresses (existing)
         { value: '', label: 'Select Pay Type' },
         { value: 'Fixed', label: 'Fixed' },
         { value: 'Hourly', label: 'Hourly' },
     ];
+
+    // --- NEW: Pay Rate Type Options for Staff ---
+    const staffPayRateTypeOptions = [
+        { value: 'Hourly', label: 'Hourly' },
+        { value: 'Fixed per Job', label: 'Fixed per Job' },
+        { value: 'Percentage per Job', label: 'Percentage per Job' },
+        { value: 'Daily Rate', label: 'Daily Rate' },
+    ];
+    // --- END NEW ---
 
     useEffect(() => {
         if (isOpen) {
@@ -100,6 +116,13 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                 role: initialData?.role || 'staff',
                 employeeId: initialData?.employeeId || '',
                 salesPersonName: initialData?.salesPersonName || '',
+                // --- NEW STAFF PAYROLL FIELDS RESET/INITIALIZATION ON OPEN ---
+                payRateType: initialData?.payRateType || 'Hourly',
+                hourlyRate: initialData?.hourlyRate || 0,
+                jobFixedAmount: initialData?.jobFixedAmount || 0,
+                jobPercentage: initialData?.jobPercentage || 0,
+                dailyClockInThresholdMins: initialData?.dailyClockInThresholdMins || 480,
+                // --- END NEW STAFF PAYROLL FIELDS ---
             });
             setError(null);
             setSuccessMessage(null);
@@ -155,7 +178,7 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                 newPhones[index] = { ...newPhones[index], [name]: value };
             }
             if (newPhones[index].number.length > 0 && !newPhones.some(p => p.isMaster)) {
-                 newPhones[index].isMaster = true;
+                newPhones[index].isMaster = true;
               }
             return { ...prev, phones: newPhones };
         });
@@ -255,52 +278,20 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
         }
 
         try {
+            let response; // Declare response here
             const dataToSave = { ...formData };
 
             if (type === 'staff') {
                 dataToSave.email = formData.emails.find(e => e.isMaster)?.email || formData.emails[0]?.email || '';
                 dataToSave.phone = formData.phones.find(p => p.isMaster)?.number || formData.phones[0]?.number || '';
-            } else {
-                dataToSave.email = formData.emails.filter(e => e.email.trim() !== '');
-                dataToSave.phone = formData.phones.filter(p => p.number.trim() !== '');
-            }
+                // Ensure pay rate numbers are parsed as floats/numbers
+                dataToSave.hourlyRate = parseFloat(formData.hourlyRate) || 0;
+                dataToSave.jobFixedAmount = parseFloat(formData.jobFixedAmount) || 0;
+                dataToSave.jobPercentage = parseFloat(formData.jobPercentage) || 0;
+                dataToSave.dailyClockInThresholdMins = parseInt(formData.dailyClockInThresholdMins) || 0;
 
 
-            let response;
-            if (type === 'lead') {
-                delete dataToSave.serviceAddresses;
-                delete dataToSave.customerType;
-                delete dataToSave.industry;
-                delete dataToSave.role;
-                delete dataToSave.employeeId;
-
-                if (initialData) {
-                    response = await api.put(`/leads/${initialData._id}`, dataToSave);
-                    setSuccessMessage('Lead updated successfully!');
-                } else {
-                    response = await api.post('/leads', dataToSave);
-                    setSuccessMessage('Lead added successfully!');
-                }
-            } else if (type === 'customer') {
-                delete dataToSave.leadSource;
-                delete dataToSave.leadStatus;
-                delete dataToSave.convertedFromLead;
-                delete dataToSave.role;
-                delete dataToSave.employeeId;
-                
-                dataToSave.serviceAddresses = formData.serviceAddresses.map(addr => ({
-                    ...addr,
-                    amount: parseFloat(addr.amount) || 0
-                })).filter(addr => Object.values(addr).some(val => val && val.toString().trim() !== ''));
-
-                if (initialData?._id && !initialData?.convertedFromLead) {
-                    response = await api.put(`/customers/${initialData._id}`, dataToSave);
-                    setSuccessMessage('Customer updated successfully!');
-                } else {
-                    response = await api.post('/customers', dataToSave);
-                    setSuccessMessage('Customer added successfully!');
-                }
-            } else if (type === 'staff') {
+                // Don't delete payroll fields here as they are relevant for staff
                 delete dataToSave.companyName;
                 delete dataToSave.leadSource;
                 delete dataToSave.leadStatus;
@@ -317,6 +308,51 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                 } else {
                     response = await api.post('/staff', dataToSave);
                     setSuccessMessage('Staff member added successfully!');
+                }
+            } else if (type === 'customer') {
+                delete dataToSave.leadSource;
+                delete dataToSave.leadStatus;
+                delete dataToSave.convertedFromLead;
+                delete dataToSave.role;
+                delete dataToSave.employeeId;
+                // Delete staff payroll fields if they somehow sneaked in
+                delete dataToSave.payRateType;
+                delete dataToSave.hourlyRate;
+                delete dataToSave.jobFixedAmount;
+                delete dataToSave.jobPercentage;
+                delete dataToSave.dailyClockInThresholdMins;
+                
+                dataToSave.serviceAddresses = formData.serviceAddresses.map(addr => ({
+                    ...addr,
+                    amount: parseFloat(addr.amount) || 0
+                })).filter(addr => Object.values(addr).some(val => val && val.toString().trim() !== ''));
+
+                if (initialData?._id && !initialData?.convertedFromLead) {
+                    response = await api.put(`/customers/${initialData._id}`, dataToSave);
+                    setSuccessMessage('Customer updated successfully!');
+                } else {
+                    response = await api.post('/customers', dataToSave);
+                    setSuccessMessage('Customer added successfully!');
+                }
+            } else if (type === 'lead') {
+                delete dataToSave.serviceAddresses;
+                delete dataToSave.customerType;
+                delete dataToSave.industry;
+                delete dataToSave.role;
+                delete dataToSave.employeeId;
+                // Delete staff payroll fields if they somehow sneaked in
+                delete dataToSave.payRateType;
+                delete dataToSave.hourlyRate;
+                delete dataToSave.jobFixedAmount;
+                delete dataToSave.jobPercentage;
+                delete dataToSave.dailyClockInThresholdMins;
+
+                if (initialData) {
+                    response = await api.put(`/leads/${initialData._id}`, dataToSave);
+                    setSuccessMessage('Lead updated successfully!');
+                } else {
+                    response = await api.post('/leads', dataToSave);
+                    setSuccessMessage('Lead added successfully!');
                 }
             }
 
@@ -638,6 +674,71 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                                 value={formData.employeeId}
                                 onChange={handleChange}
                             />
+                            {/* --- NEW PAYROLL FIELDS FOR STAFF --- */}
+                            <h3 className="text-lg font-bold text-gray-900 col-span-full mt-6 mb-2">Payroll Settings</h3>
+                            
+                            <ModernSelect
+                                label="Pay Rate Type"
+                                name="payRateType"
+                                value={formData.payRateType}
+                                onChange={handleChange}
+                                options={staffPayRateTypeOptions}
+                                required
+                            />
+
+                            {formData.payRateType === 'Hourly' && (
+                                <ModernInput
+                                    label="Hourly Rate (£)"
+                                    name="hourlyRate"
+                                    type="number"
+                                    value={formData.hourlyRate}
+                                    onChange={handleChange}
+                                    step="0.01"
+                                    min="0"
+                                    required
+                                />
+                            )}
+
+                            {formData.payRateType === 'Fixed per Job' && (
+                                <ModernInput
+                                    label="Fixed Amount per Job (£)"
+                                    name="jobFixedAmount"
+                                    type="number"
+                                    value={formData.jobFixedAmount}
+                                    onChange={handleChange}
+                                    step="0.01"
+                                    min="0"
+                                    required
+                                />
+                            )}
+
+                            {formData.payRateType === 'Percentage per Job' && (
+                                <ModernInput
+                                    label="Percentage per Job (%)"
+                                    name="jobPercentage"
+                                    type="number"
+                                    value={formData.jobPercentage}
+                                    onChange={handleChange}
+                                    step="0.01"
+                                    min="0"
+                                    max="100"
+                                    required
+                                />
+                            )}
+
+                            {formData.payRateType === 'Daily Rate' && (
+                                <ModernInput
+                                    label="Daily Clock-in Threshold (Mins)"
+                                    name="dailyClockInThresholdMins"
+                                    type="number"
+                                    value={formData.dailyClockInThresholdMins}
+                                    onChange={handleChange}
+                                    min="0"
+                                    required
+                                    placeholder="e.g., 480 for 8 hours"
+                                />
+                            )}
+                            {/* --- END NEW PAYROLL FIELDS --- */}
                         </>
                     )}
 

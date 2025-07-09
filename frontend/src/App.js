@@ -26,10 +26,12 @@ import SpotCheckerPage from './components/dashboard/SpotCheckerPage';
 import RoutePlannerView from './components/route-planner/RoutePlannerView';
 import StaffAbsencePage from './components/staff/StaffAbsencePage';
 import InvoicePage from './components/invoices/InvoicePage';
-import InvoiceDetails from './components/invoices/InvoiceDetails'; // NEW: Import the InvoiceDetails component
+import InvoiceDetails from './components/invoices/InvoiceDetails';
 
-// NEW: Import StaffSchedulePage
 import StaffSchedulePage from './components/staffPortal/StaffSchedulePage';
+
+// NEW: Import PayrollPage
+import PayrollPage from './components/payroll/PayrollPage'; // <--- ADD THIS IMPORT
 
 
 import { DndProvider } from 'react-dnd';
@@ -134,7 +136,6 @@ function AppContent() {
                         {/* Private Routes */}
                         <Route path="/customer-portal" element={<PrivateRoute roles={['customer']}><CustomerDashboard /></PrivateRoute>} />
                         <Route path="/staff-dashboard" element={<PrivateRoute roles={['staff', 'manager']}><StaffDashboard /></PrivateRoute>} />
-                        {/* NEW: Staff Schedule Page Route */}
                         <Route path="/staff-schedule" element={<PrivateRoute roles={['staff', 'manager', 'admin']}><StaffSchedulePage /></PrivateRoute>} />
                         <Route path="/dashboard" element={<PrivateRoute roles={['admin', 'manager']}><Dashboard /></PrivateRoute>} />
                         <Route path="/customers" element={<PrivateRoute roles={['admin', 'manager']}><CustomerPage /></PrivateRoute>} />
@@ -150,14 +151,14 @@ function AppContent() {
                         <Route path="/email-templates" element={<PrivateRoute roles={['admin']}><EmailTemplatesView /></PrivateRoute>} />
 
                         {/* --- INVOICE ROUTES --- */}
-                        {/* Base invoice listing page */}
                         <Route path="/invoices" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><InvoicePage /></PrivateRoute>} />
-                        {/* NEW: Invoice Details Page - This route must come AFTER the base /invoices route */}
                         <Route path="/invoices/:invoiceId" element={<PrivateRoute roles={['admin', 'manager', 'staff']}><InvoiceDetails /></PrivateRoute>} />
+                        
+                        {/* NEW: Payroll Page Route - Replaces old placeholder */}
+                        <Route path="/payroll" element={<PrivateRoute roles={['admin', 'manager']}><PayrollPage /></PrivateRoute>} /> {/* <--- UPDATED THIS ROUTE */}
                         
                         <Route path="/jobs" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><div className="p-8">Job Management Page</div></PrivateRoute>} />
                         <Route path="/quotes" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><div className="p-8">Quotes Page</div></PrivateRoute>} />
-                        <Route path="/payroll" element={<PrivateRoute roles={['admin']}><div className="p-8">Payroll Page</div></PrivateRoute>} />
                         <Route path="/commission-report" element={<PrivateRoute roles={['admin', 'manager']}><div className="p-8">Commission Report Page</div></PrivateRoute>} />
 
                         {/* Default Route */}

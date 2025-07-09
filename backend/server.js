@@ -52,7 +52,8 @@ const stockRoutes = require('./routes/stockRoutes');
 const emailTemplateRoutes = require('./routes/emailTemplateRoutes');
 const absenceRoutes = require('./routes/absenceRoutes');
 const invoiceRoutes = require('./routes/invoiceRoutes');
-const dailyTimeRoutes = require('./routes/dailyTimeRoutes'); // <--- ADD THIS LINE
+const dailyTimeRoutes = require('./routes/dailyTimeRoutes');
+const payrollRoutes = require('./routes/payrollRoutes'); // <--- ADD THIS LINE
 
 // Make the 'uploads' folder static
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -71,7 +72,8 @@ app.use('/api/email-templates', emailTemplateRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/absences', absenceRoutes);
 app.use('/api/public/forms', publicRoutes);
-app.use('/api/daily-time', dailyTimeRoutes); // <--- ADD THIS LINE
+app.use('/api/daily-time', dailyTimeRoutes);
+app.use('/api/payroll', payrollRoutes); // <--- ADD THIS LINE
 
 app.get('/', (req, res) => {
     res.send('API is running...');

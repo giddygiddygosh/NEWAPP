@@ -11,30 +11,15 @@ const path = require('path');
 const fs = require('fs');
 const Form = require('../models/Form');
 const Invoice = require('../models/Invoice');
+// --- NEW: Import the invoice service ---
+const { generateAndProcessInvoiceForJob } = require('../services/invoiceService');
 
 const uploadsDir = path.join(__dirname, '../../uploads');
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-const extractTasksFromFormSchema = (formSchema) => {
-    const tasks = [];
-    if (!formSchema || !Array.isArray(formSchema)) return tasks;
-    formSchema.forEach(row => {
-        if (row.columns && Array.isArray(row.columns)) {
-            row.columns.forEach(col => {
-                if (col.fields && Array.isArray(col.fields)) {
-                    col.fields.forEach(field => {
-                        if (field.label && field.name) {
-                            tasks.push({ taskId: field.name, description: field.label, isCompleted: false });
-                        }
-                    });
-                }
-            });
-        }
-    });
-    return tasks;
-};
+// --- (All functions before returnJobStock remain the same) ---
 
 const getJobs = asyncHandler(async (req, res) => {
     const companyId = req.user.company._id;
@@ -58,7 +43,7 @@ const getJobById = asyncHandler(async (req, res) => {
 });
 
 const createJob = asyncHandler(async (req, res) => {
-    const { customer, staff, serviceType, description, address, date, time, priority, price, usedStock, formTemplate } = req.body;
+    const { customer, staff, serviceType, description, address, date, time, priority, price, usedStockItems, formTemplate } = req.body;
     const companyId = req.user.company._id;
 
     if (!customer || !staff || !Array.isArray(staff) || staff.length === 0 || !serviceType || !address || !date || typeof price !== 'number') {
@@ -80,21 +65,30 @@ const createJob = asyncHandler(async (req, res) => {
             const form = await Form.findById(formTemplate).session(session);
             if (form) jobTasks = extractTasksFromFormSchema(form.schema);
         }
+        
+        const formattedUsedStock = (usedStockItems || []).map(item => ({
+            stockId: item.stockItem,
+            name: item.name,
+            quantity: item.quantityUsed
+        }));
 
         const jobData = {
             company: companyId, customer, staff, serviceType, description, address: jobAddress, date, time,
-            priority, price, usedStock: usedStock || [], formTemplate: formTemplate || null, tasks: jobTasks,
+            priority, price, 
+            usedStock: formattedUsedStock, 
+            formTemplate: formTemplate || null, 
+            tasks: jobTasks,
         };
         const newJobArray = await Job.create([jobData], { session });
         const newJob = newJobArray[0];
 
-        if (usedStock && usedStock.length > 0) {
-            for (const item of usedStock) {
+        if (formattedUsedStock.length > 0) {
+            for (const item of formattedUsedStock) {
                 await StockItem.findByIdAndUpdate(item.stockId, { $inc: { stockQuantity: -item.quantity } }, { session, runValidators: true });
             }
         }
+        
         await session.commitTransaction();
-        // Populate the new job before sending it back
         const populatedNewJob = await Job.findById(newJob._id)
             .populate('customer', 'contactPersonName email phone address')
             .populate('staff', 'contactPersonName email phone role');
@@ -110,14 +104,56 @@ const createJob = asyncHandler(async (req, res) => {
 });
 
 const updateJob = asyncHandler(async (req, res) => {
-    const job = await Job.findOneAndUpdate({ _id: req.params.id, company: req.user.company._id }, req.body, { new: true, runValidators: true })
-        .populate('customer', 'contactPersonName email phone address') // Add population here
-        .populate('staff', 'contactPersonName email phone role'); // Add population here
-    if (!job) {
-        res.status(404);
-        throw new Error('Job not found or not authorized.');
+    const { id } = req.params;
+    const companyId = req.user.company._id;
+    const data = req.body;
+
+    const updateFields = {};
+
+    const allowedDirectFields = [
+        'serviceType', 'description', 'date', 'time', 'priority', 
+        'price', 'status', 'notes', 'duration'
+    ];
+
+    allowedDirectFields.forEach(field => {
+        if (data[field] !== undefined) {
+            updateFields[field] = data[field];
+        }
+    });
+
+    if (data.address) {
+        updateFields.address = data.address;
     }
-    res.status(200).json(job);
+
+    if (data.formTemplate !== undefined) {
+        updateFields.formTemplate = data.formTemplate === '' ? null : data.formTemplate;
+    }
+    
+    if (data.staff !== undefined && Array.isArray(data.staff)) {
+        updateFields.staff = data.staff.map(s => (typeof s === 'object' && s !== null) ? s._id : s).filter(Boolean);
+    }
+    
+    if (data.usedStockItems !== undefined && Array.isArray(data.usedStockItems)) {
+        updateFields.usedStock = data.usedStockItems.map(item => ({
+             stockId: item.stockItem || item.stockId,
+             name: item.name,
+             quantity: item.quantityUsed || item.quantity
+        }));
+    }
+
+    const job = await Job.findOneAndUpdate(
+        { _id: id, company: companyId },
+        { $set: updateFields }, 
+        { new: true, runValidators: true }
+    )
+    .populate('customer', 'contactPersonName email phone address')
+    .populate('staff', 'contactPersonName email phone role');
+    
+    if (!job) {
+        return res.status(404).json({ message: 'Job not found or not authorized.'});
+    }
+    
+    res.status(200).json({ message: "Job updated successfully.", job: job });
 });
 
 const deleteJob = asyncHandler(async (req, res) => {
@@ -164,7 +200,6 @@ const clockInJob = asyncHandler(async (req, res) => {
     job.status = 'In Progress';
     const updatedJob = await job.save();
 
-    // Populate the updated job before sending it back
     const populatedJobForResponse = await Job.findById(updatedJob._id)
         .populate('customer', 'contactPersonName email phone address')
         .populate('staff', 'contactPersonName email phone role');
@@ -183,12 +218,10 @@ const clockOutJob = asyncHandler(async (req, res) => {
         throw new Error('You are not assigned to this job.');
     }
     if (!job.clockInTime) {
-        console.log(`DEBUG: Job ${req.params.id} clock-out failed: Not clocked in yet.`); // Debug log added
         res.status(400);
         throw new Error('Cannot clock out, not clocked in yet.');
     }
     if (job.clockOutTime) {
-        console.log(`DEBUG: Job ${req.params.id} clock-out failed: Already clocked out.`); // Debug log added
         res.status(400);
         throw new Error('Already clocked out for this job.');
     }
@@ -196,7 +229,6 @@ const clockOutJob = asyncHandler(async (req, res) => {
     job.status = 'Pending Completion';
     const updatedJob = await job.save();
 
-    // Populate the updated job before sending it back
     const populatedJobForResponse = await Job.findById(updatedJob._id)
         .populate('customer', 'contactPersonName email phone address')
         .populate('staff', 'contactPersonName email phone role');
@@ -212,95 +244,80 @@ const uploadJobPhoto = asyncHandler(async (req, res) => {
     res.status(501).json({ message: 'Not Implemented' });
 });
 
-const returnJobStock = asyncHandler(async (req, res) => {
-    const { id } = req.params; // Job ID
-    const { returnedStockItems, newStatus } = req.body; // Data from the frontend
-    const companyId = req.user.company._id; // Get company ID from authenticated user
 
+// --- THIS IS THE UPDATED FUNCTION ---
+const returnJobStock = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { returnedStockItems, newStatus } = req.body;
+    
     const session = await mongoose.startSession();
     session.startTransaction();
 
+    let populatedJobForResponse;
+
     try {
-        // 1. Find the job and ensure it belongs to the user's company
         const job = await Job.findById(id).session(session);
 
-        if (!job || job.company.toString() !== companyId.toString()) {
-            res.status(404);
-            throw new Error('Job not found or not authorized for this company.');
+        if (!job) {
+            throw new Error('Job not found.');
+        }
+        if (job.company.toString() !== req.user.company._id.toString()) {
+            throw new Error('Not authorized to modify this job.');
         }
 
-        // Optional: Check if the user is assigned to this job if role is 'staff'
-        if (req.user.role === 'staff' && !job.staff.some(s => s.equals(req.user.staff))) {
-            res.status(403);
-            throw new Error('You are not assigned to this job and cannot complete it.');
-        }
-
-        // 2. Update stock quantities (only if returnedStockItems exists and has items)
         if (returnedStockItems && Array.isArray(returnedStockItems) && returnedStockItems.length > 0) {
             for (const item of returnedStockItems) {
                 const { stockId, quantity } = item;
-
-                if (!mongoose.Types.ObjectId.isValid(stockId)) {
-                    console.warn(`Invalid stockId: ${stockId}. Skipping stock update for this item.`);
+                if (!mongoose.Types.ObjectId.isValid(stockId) || typeof quantity !== 'number' || quantity < 0) {
+                    console.warn(`Invalid stock return data for stockId ${stockId}. Skipping.`);
                     continue;
                 }
-                if (typeof quantity !== 'number' || quantity <= 0) {
-                    console.warn(`Invalid quantity for stockId ${stockId}: ${quantity}. Skipping stock update.`);
-                    continue;
-                }
-
-                const updatedStock = await StockItem.findOneAndUpdate(
-                    { _id: stockId, company: companyId },
-                    { $inc: { stockQuantity: quantity } },
-                    { new: true, session: session, runValidators: true }
-                );
-
-                if (!updatedStock) {
-                    console.warn(`Stock item ${stockId} not found or not authorized for company ${companyId}.`);
+                if (quantity > 0) {
+                    await StockItem.findByIdAndUpdate(stockId, { $inc: { stockQuantity: quantity } }, { session });
                 }
             }
         }
 
-        // 3. Update job status
-        if (!newStatus) {
-            res.status(400);
-            throw new Error('New status is required to complete the job.');
-        }
         job.status = newStatus;
-
-        if (!job.completedAt && newStatus === 'Completed') {
+        if (newStatus === 'Completed' && !job.completedAt) {
             job.completedAt = new Date();
         }
 
-        const updatedJobDoc = await job.save({ session }); // Save job changes within the transaction
-
-        // Perform population *before* committing the transaction
-        const populatedJobForResponse = await Job.findById(updatedJobDoc._id)
+        const updatedJobDoc = await job.save({ session });
+        
+        populatedJobForResponse = await Job.findById(updatedJobDoc._id)
             .populate('customer', 'contactPersonName email phone address')
             .populate('staff', 'contactPersonName email phone role')
-            .session(session); // Use the current session for this query
+            .session(session);
 
-        await session.commitTransaction(); // Now commit the transaction
-
-        // 4. Send back the populated job
-        res.status(200).json({
-            message: `Job marked as ${newStatus} and stock updated!`,
-            job: populatedJobForResponse // Send the populated document
-        });
+        await session.commitTransaction();
 
     } catch (error) {
-        await session.abortTransaction(); // Rollback any changes if an error occurs
+        await session.abortTransaction();
         console.error("Error in returnJobStock:", error);
-        if (error.name === 'CastError') {
-            return res.status(400).json({ message: 'Invalid Job ID or Stock Item ID.' });
-        }
-        if (res.statusCode === 200) {
-            res.status(500);
-        }
-        res.json({ message: error.message || 'Server error: Failed to complete job or return stock.' });
+        res.status(500).json({ message: error.message || 'Failed to complete job.' });
+        session.endSession();
+        return;
     } finally {
-        session.endSession(); // Ensure session is always closed
+        session.endSession();
     }
+
+    // --- AUTOMATION TRIGGER ---
+    // After the transaction is successful, trigger invoice generation in the background.
+    if (newStatus === 'Completed') {
+        console.log(`[Job Complete] Triggering background invoice processing for job ${id}.`);
+        // We do NOT 'await' this, so the user gets an immediate response.
+        generateAndProcessInvoiceForJob(id, req.user).catch(err => {
+            // Log any errors from the background process.
+            console.error(`[BACKGROUND_INVOICE_ERROR] Failed to auto-generate invoice for job ${id}:`, err.message);
+        });
+    }
+
+    // Respond to the user immediately.
+    res.status(200).json({
+        message: `Job marked as ${newStatus} and stock updated!`,
+        job: populatedJobForResponse
+    });
 });
 
 module.exports = {

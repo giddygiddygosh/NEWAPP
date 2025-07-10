@@ -1,8 +1,7 @@
-// frontend/src/components/invoices/CreateInvoiceModal.jsx
-// This modal is now repurposed for creating invoices from stock items.
+// src/components/stock/StockInvoiceModal.js
 
-import React, { useState, useEffect, useMemo } from 'react';
-import Modal from '../common/Modal'; // Assuming a generic Modal component exists
+import React, { useState, useMemo } from 'react';
+import Modal from '../common/Modal';
 import ModernSelect from '../common/ModernSelect';
 import ModernInput from '../common/ModernInput';
 import { PlusIcon, XCircleIcon } from '@heroicons/react/20/solid';
@@ -10,7 +9,7 @@ import { useCurrency } from '../context/CurrencyContext';
 import api from '../../utils/api';
 import { toast } from 'react-toastify';
 
-const CreateInvoiceModal = ({ isOpen, onClose, onInvoiceCreated, stockItems, customers }) => {
+const StockInvoiceModal = ({ isOpen, onClose, stockItems, customers }) => {
     const { formatCurrency } = useCurrency();
     const [selectedCustomerId, setSelectedCustomerId] = useState('');
     const [itemsToInvoice, setItemsToInvoice] = useState([]);
@@ -19,28 +18,16 @@ const CreateInvoiceModal = ({ isOpen, onClose, onInvoiceCreated, stockItems, cus
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState(null);
 
-    // Reset state when modal is opened/closed
-    useEffect(() => {
-        if (!isOpen) {
-            setSelectedCustomerId('');
-            setItemsToInvoice([]);
-            setSelectedStockId('');
-            setQuantity(1);
-            setError(null);
-            setIsSaving(false);
-        }
-    }, [isOpen]);
-
     const customerOptions = useMemo(() => [
         { value: '', label: 'Select a Customer...' },
-        ...(customers || []).map(c => ({ value: c._id, label: c.contactPersonName }))
+        ...customers.map(c => ({ value: c._id, label: c.contactPersonName }))
     ], [customers]);
 
     const availableStockOptions = useMemo(() => {
         const invoicedIds = new Set(itemsToInvoice.map(item => item.stockId));
         return [
             { value: '', label: 'Select a Stock Item...' },
-            ...(stockItems || [])
+            ...stockItems
                 .filter(item => !invoicedIds.has(item._id))
                 .map(item => ({ value: item._id, label: `${item.name} (Avail: ${item.stockQuantity})` }))
         ];
@@ -79,11 +66,9 @@ const CreateInvoiceModal = ({ isOpen, onClose, onInvoiceCreated, stockItems, cus
                 customerId: selectedCustomerId,
                 items: itemsToInvoice.map(({ stockId, quantity }) => ({ stockId, quantity })),
             };
-            // Use the new backend route for stock invoices
-            const response = await api.post('/invoices/stock', payload);
+            await api.post('/invoices/stock', payload);
             toast.success('Stock invoice created successfully!');
-            onInvoiceCreated(response.data.invoice); // Pass the new invoice up
-            onClose();
+            onClose(); // Close the modal on success
         } catch (err) {
             const errorMessage = err.response?.data?.message || 'Failed to create stock invoice.';
             setError(errorMessage);
@@ -125,7 +110,7 @@ const CreateInvoiceModal = ({ isOpen, onClose, onInvoiceCreated, stockItems, cus
                             label="Qty"
                             type="number"
                             value={quantity}
-                            onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 1)}
+                            onChange={(e) => setQuantity(parseInt(e.target.value, 10))}
                             min="1"
                             className="w-20"
                         />
@@ -169,4 +154,4 @@ const CreateInvoiceModal = ({ isOpen, onClose, onInvoiceCreated, stockItems, cus
     );
 };
 
-export default CreateInvoiceModal;
+export default StockInvoiceModal;

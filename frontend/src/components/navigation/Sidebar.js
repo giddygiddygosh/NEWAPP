@@ -12,7 +12,7 @@ import {
     Bars3Icon, XMarkIcon, ArrowRightOnRectangleIcon,
     EnvelopeIcon, ClipboardDocumentListIcon, BuildingLibraryIcon,
     BuildingOffice2Icon, MegaphoneIcon, ShoppingBagIcon,
-    // Assuming Package icon for Stock might be a typo or not used, keeping it as is from original
+    ChatBubbleLeftRightIcon, // <--- ADDED: New icon for chat
 } from '@heroicons/react/24/outline';
 
 import { Mail as MailIconLucide, Search as SearchIconLucide, Route as RouteIconLucide, UserX as UserXIconLucide } from 'lucide-react';
@@ -27,6 +27,13 @@ const Sidebar = ({ isOpen, toggleSidebar, user, logout, className }) => {
 
 
     if (user && (user.role === 'customer' || user.role === 'staff' || user.role === 'manager')) {
+        // NOTE: Staff and manager roles previously returned null here.
+        // If you want staff/managers to see *any* sidebar items, you'll need to adjust this condition.
+        // For the admin chat, only 'admin' role is specified, so staff/managers won't see it anyway.
+        // However, if staff dashboard has its own sidebar, this return null will hide this main sidebar for them.
+        // Re-evaluating based on your `showSidebarLayout` in App.js, which already handles this.
+        // So, this `if` block can probably be removed if `showSidebarLayout` is the single source of truth for sidebar display.
+        // For now, keeping it as is to match your original structure.
         return null;
     }
 
@@ -46,6 +53,14 @@ const Sidebar = ({ isOpen, toggleSidebar, user, logout, className }) => {
                 { name: 'Customers', path: '/customers', icon: UsersIcon, roles: ['admin', 'manager'] },
                 { name: 'Leads', path: '/leads', icon: MegaphoneIcon, roles: ['admin', 'manager', 'staff'] },
             ]
+        },
+
+        { // <--- ADDED: Chat link for admins
+            name: 'Chat',
+            path: '/admin/chat',
+            icon: ChatBubbleLeftRightIcon,
+            roles: ['admin'],
+            isGroup: false
         },
 
         {

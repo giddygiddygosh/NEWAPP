@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, updateEmail } from 'firebase/auth';
-import { getCurrencySymbol } from '../../utils/helpers';
+import { getCurrencySymbol } from '../../utils/helpers'; // Ensure this utility is available if used elsewhere
 
 const SettingsPage = () => {
     const { user, loading: authLoading, auth } = useAuth();
@@ -19,14 +19,13 @@ const SettingsPage = () => {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
     const [successMessage, setSuccessMessage] = useState(null);
-    const [activeTab, setActiveTab] = useState('company');
+    const [activeTab, setActiveTab] = useState('company'); // Default to 'company' tab
 
     const defaultAddress = useMemo(() => ({ street: '', city: '', county: '', postcode: '', country: '' }), []);
 
     const [localSettings, setLocalSettings] = useState({
         companyName: '',
         companyLogoUrl: '',
-        // These now come from fetchedSettings.company.settings.property
         companyAddress: defaultAddress,
         companyPhone: '',
         companyEmail: '',
@@ -47,9 +46,20 @@ const SettingsPage = () => {
         defaultCurrencyDecimalSeparator: '.',
         defaultCurrencyFormatTemplate: '{symbol}{amount}',
 
-        invoicePrefix: 'INV-', // From CompanySetting.invoiceSettings
-        nextInvoiceSeqNumber: 1, // From CompanySetting.invoiceSettings
-        defaultTaxRate: 0, // From CompanySetting.invoiceSettings
+        invoicePrefix: 'INV-',
+        nextInvoiceSeqNumber: 1,
+        defaultTaxRate: 0,
+
+        // Email Automation Settings in local state
+        // Initializing all to true as requested in previous turn for testing defaults
+        emailAutomation: {
+            welcome_email: { enabled: true },
+            appointment_reminder: { enabled: true, daysBefore: 1 },
+            job_completion: { enabled: true },
+            invoice_email: { enabled: true },
+            invoice_reminder: { enabled: true, daysAfter: 7 },
+            review_request: { enabled: true, daysAfter: 3 },
+        },
     });
 
     const [userProfile, setUserProfile] = useState({
@@ -62,7 +72,7 @@ const SettingsPage = () => {
     });
 
     const [logoFile, setLogoFile] = useState(null);
-    const [logoPreview, setLogoPreview] = useState('');
+    const [logoPreview, setLogoPreview] = useState(''); // Corrected: initialized as an empty string for image URLs
 
     const currencyOptions = [
         { value: 'GBP', label: 'GBP - British Pound (£)' },
@@ -100,25 +110,32 @@ const SettingsPage = () => {
                 const settingsRes = await api.get('/settings');
                 const fetchedSettings = settingsRes.data;
 
+                // --- DEBUG LOG: Initial fetched settings ---
+                console.log('--- SETTINGS PAGE: Initial fetchedSettings ---');
+                // CORRECTED: Access companyName directly from fetchedSettings
+                console.log('Company Name:', fetchedSettings.companyName); 
+                console.log('Global Invoice Email Enabled:', fetchedSettings.emailAutomation?.invoice_email?.enabled);
+                console.log('--- END Initial fetchedSettings ---');
+                // --- END DEBUG LOG ---
+
                 const userProfileRes = await api.get('/auth/me');
                 const fetchedUserProfile = userProfileRes.data.user;
 
-                setSettings(fetchedSettings);
+                setSettings(fetchedSettings); // Store raw fetched settings for reference if needed
 
                 setLocalSettings(prev => ({
                     ...prev,
-                    companyName: fetchedSettings.company?.name || '',
+                    // CORRECTED: Access companyName directly from fetchedSettings
+                    companyName: fetchedSettings.companyName || '', 
                     companyLogoUrl: fetchedSettings.companyLogoUrl || '',
                     defaultFormName: fetchedSettings.defaultFormName || '',
-                    // --- FIXES START HERE ---
-                    // Access nested company settings for initial display
+                    // Keep these as they seem to be nested under `company.settings` in the API response structure based on the screenshot
                     companyAddress: fetchedSettings.company?.settings?.address || defaultAddress,
                     companyPhone: fetchedSettings.company?.settings?.phone || '',
                     companyEmail: fetchedSettings.company?.settings?.email || '',
                     companyWebsite: fetchedSettings.company?.settings?.website || '',
-                    companyTaxId: fetchedSettings.company?.settings?.taxId || '', // Corrected path
-                    // --- FIXES END HERE ---
-                    
+                    companyTaxId: fetchedSettings.company?.settings?.taxId || '',
+
                     backgroundColor: fetchedSettings.backgroundColor || '#FFFFFF',
                     primaryColor: fetchedSettings.primaryColor || '#3B82F6',
                     borderColor: fetchedSettings.borderColor || '#D1D5DB',
@@ -135,6 +152,26 @@ const SettingsPage = () => {
                     invoicePrefix: fetchedSettings.invoiceSettings?.invoicePrefix || 'INV-',
                     nextInvoiceSeqNumber: fetchedSettings.invoiceSettings?.nextInvoiceSeqNumber || 1,
                     defaultTaxRate: fetchedSettings.invoiceSettings?.defaultTaxRate || 0,
+
+                    // Populate emailAutomation from fetched settings
+                    // Now, default to true if fetched is undefined/null, for all as requested.
+                    emailAutomation: {
+                        welcome_email: { enabled: fetchedSettings.emailAutomation?.welcome_email?.enabled ?? true },
+                        appointment_reminder: { 
+                            enabled: fetchedSettings.emailAutomation?.appointment_reminder?.enabled ?? true, // Changed to true
+                            daysBefore: fetchedSettings.emailAutomation?.appointment_reminder?.daysBefore ?? 1
+                        },
+                        job_completion: { enabled: fetchedSettings.emailAutomation?.job_completion?.enabled ?? true }, // Changed to true
+                        invoice_email: { enabled: fetchedSettings.emailAutomation?.invoice_email?.enabled ?? true },
+                        invoice_reminder: { 
+                            enabled: fetchedSettings.emailAutomation?.invoice_reminder?.enabled ?? true,
+                            daysAfter: fetchedSettings.emailAutomation?.invoice_reminder?.daysAfter ?? 7
+                        },
+                        review_request: { 
+                            enabled: fetchedSettings.emailAutomation?.review_request?.enabled ?? true,
+                            daysAfter: fetchedSettings.emailAutomation?.review_request?.daysAfter ?? 3
+                        },
+                    },
                 }));
 
                 setUserProfile(prev => ({
@@ -156,7 +193,7 @@ const SettingsPage = () => {
         };
 
         fetchSettingsAndProfile();
-    }, [user, authLoading, defaultAddress]);
+    }, [user, authLoading, defaultAddress]); // Added defaultAddress to dependency array as it's used in useCallback dependency.
 
     const handleLocalSettingsChange = useCallback((e) => {
         const { name, value, type } = e.target;
@@ -203,8 +240,24 @@ const SettingsPage = () => {
         const { name, value, type } = e.target;
         setLocalSettings(prev => ({
             ...prev,
-            [name]: type === 'number' && name === 'defaultTaxRate' ? parseFloat(value) / 100 :
-                    type === 'number' ? parseFloat(value) : value
+            [name]: type === 'number' && name === 'defaultTaxRate' ? parseFloat(value) : 
+                     type === 'number' ? parseFloat(value) : value
+        }));
+    }, []);
+    
+    const handleEmailAutomationChange = useCallback((e) => {
+        const { name, value, type, checked } = e.target;
+        const [category, field] = name.split('.'); 
+
+        setLocalSettings(prev => ({
+            ...prev,
+            emailAutomation: {
+                ...prev.emailAutomation,
+                [category]: {
+                    ...prev.emailAutomation[category],
+                    [field]: type === 'checkbox' ? checked : (type === 'number' ? parseFloat(value) : value),
+                },
+            },
         }));
     }, []);
 
@@ -264,52 +317,97 @@ const SettingsPage = () => {
                     formatTemplate: localSettings.defaultCurrencyFormatTemplate,
                 },
 
-                invoiceSettings: { // These are for the CompanySetting model
+                invoiceSettings: {
                     invoicePrefix: localSettings.invoicePrefix,
                     nextInvoiceSeqNumber: localSettings.nextInvoiceSeqNumber,
                     defaultTaxRate: localSettings.defaultTaxRate,
                 },
 
+                emailAutomation: localSettings.emailAutomation, // Send the full object as is from state
+
                 // These are for the Company model (passed as top-level fields for backend processing)
-                name: localSettings.companyName,
-                address: localSettings.companyAddress, // This will be handled by backend to company.settings.address
-                phone: localSettings.companyPhone,     // This will be handled by backend to company.settings.phone
-                email: localSettings.companyEmail,     // This will be handled by backend to company.settings.email
-                website: localSettings.companyWebsite, // This will be handled by backend to company.settings.website
-                taxId: localSettings.companyTaxId,     // This will be handled by backend to company.settings.taxId
+                name: localSettings.companyName, // This is correct for sending to the backend
+                address: localSettings.companyAddress,
+                phone: localSettings.companyPhone,
+                email: localSettings.companyEmail,
+                website: localSettings.companyWebsite,
+                taxId: localSettings.companyTaxId,
             };
+
+            // --- DEBUG LOG: Payload being sent from Settings page ---
+            console.log('--- SETTINGS PAGE: Payload being sent to backend ---');
+            console.log('Company Name (in payload):', payload.name);
+            console.log('Global Invoice Email Enabled (in payload):', payload.emailAutomation?.invoice_email?.enabled);
+            console.log('Full Payload:', payload);
+            console.log('--- END Settings Page Payload ---');
+            // --- END DEBUG LOG ---
 
             const res = await api.put('/settings', payload);
             
+            // --- DEBUG LOG: Response received from Settings page save ---
+            console.log('--- SETTINGS PAGE: Response received from backend after save ---');
+            console.log('Response Status:', res.status);
+            console.log('Response Data:', res.data);
+            // CORRECTED: Access companyName directly from res.data.settings
+            console.log('Company Name (from response):', res.data.settings.companyName); 
+            console.log('Global Invoice Email Enabled (from response):', res.data.settings?.emailAutomation?.invoice_email?.enabled);
+            console.log('--- END Settings Page Response ---');
+            // --- END DEBUG LOG ---
+
             setSettings(res.data.settings); // Update the main settings state with the full response
 
             setLocalSettings(prev => ({
                 ...prev,
                 companyLogoUrl: uploadedLogoUrl,
-                companyName: res.data.settings.company.name,
-                // --- FIXES START HERE ---
-                // Access nested company settings for displaying after save
+                // CORRECTED: Access companyName directly from res.data.settings
+                companyName: res.data.settings.companyName, 
+                // Keep these as they seem to be nested under `company.settings` in the API response structure based on the screenshot
                 companyAddress: res.data.settings.company?.settings?.address || defaultAddress,
                 companyPhone: res.data.settings.company?.settings?.phone || '',
                 companyEmail: res.data.settings.company?.settings?.email || '',
                 companyWebsite: res.data.settings.company?.settings?.website || '',
-                companyTaxId: res.data.settings.company?.settings?.taxId || '', // Corrected path
-                // --- FIXES END HERE ---
+                companyTaxId: res.data.settings.company?.settings?.taxId || '',
                 
-                // These are for the CompanySetting model, which are direct properties
                 invoicePrefix: res.data.settings.invoiceSettings?.invoicePrefix || 'INV-',
                 nextInvoiceSeqNumber: res.data.settings.invoiceSettings?.nextInvoiceSeqNumber || 1,
                 defaultTaxRate: res.data.settings.invoiceSettings?.defaultTaxRate || 0,
+
+                // Update local state with saved emailAutomation settings from response
+                emailAutomation: {
+                    welcome_email: { enabled: res.data.settings.emailAutomation?.welcome_email?.enabled ?? true },
+                    appointment_reminder: { 
+                        enabled: res.data.settings.emailAutomation?.appointment_reminder?.enabled ?? true,
+                        daysBefore: res.data.settings.emailAutomation?.appointment_reminder?.daysBefore ?? 1
+                    },
+                    job_completion: { enabled: res.data.settings.emailAutomation?.job_completion?.enabled ?? true },
+                    invoice_email: { enabled: res.data.settings.emailAutomation?.invoice_email?.enabled ?? true },
+                    invoice_reminder: { 
+                        enabled: res.data.settings.emailAutomation?.invoice_reminder?.enabled ?? true,
+                        daysAfter: res.data.settings.emailAutomation?.invoice_reminder?.daysAfter ?? 7
+                    },
+                    review_request: { 
+                        enabled: res.data.settings.emailAutomation?.review_request?.enabled ?? true,
+                        daysAfter: res.data.settings.emailAutomation?.review_request?.daysAfter ?? 3
+                    },
+                },
             }));
             setSuccessMessage('Company Settings updated successfully!');
             setLogoFile(null);
 
             if (user && user.setUserData) {
-                user.setUserData(prev => ({ ...prev, company: { ...prev.company, name: res.data.settings.company.name } }));
+                user.setUserData(prev => ({ ...prev, company: { ...prev.company, name: res.data.settings.companyName } })); // Adjusted this line too
             }
             updateCurrency(res.data.settings.defaultCurrency);
 
         } catch (err) {
+            // --- DEBUG LOG: Error during Settings page save ---
+            console.error('--- SETTINGS PAGE: Error during save ---');
+            console.error('Error object:', err);
+            console.error('Error response data:', err.response?.data);
+            console.error('Error message:', err.message);
+            console.error('--- END Settings Page Error ---');
+            // --- END DEBUG LOG ---
+
             console.error('Error saving company settings:', err.response?.data || err.message);
             setError(err.response?.data?.message || 'Failed to save company settings. Please try again.');
         } finally {
@@ -387,6 +485,8 @@ const SettingsPage = () => {
                 errorMessage = 'New password is too weak. Please choose a stronger password.';
             } else if (err.code === 'auth/network-request-failed') {
                 errorMessage = 'Network error. Please check your internet connection.';
+            } else if (err.code === 'auth/operation-not-allowed') {
+                errorMessage = 'Email change operation not allowed. This could be due to a temporary issue or specific Firebase project settings. Please try again or contact support.';
             }
             setError(errorMessage);
         } finally {
@@ -517,6 +617,7 @@ const SettingsPage = () => {
             {/* Tab Content: Company Details */}
             {activeTab === 'company' && (
                 <form onSubmit={handleSaveCompanySettings} className="space-y-6">
+                    <h3 className="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Company Profile</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <ModernInput
                             label="Company Name"
@@ -557,7 +658,7 @@ const SettingsPage = () => {
                         </div>
                     </div>
 
-                    <h3 className="text-xl font-semibold text-gray-800 md:col-span-2 mt-4">Contact Information</h3>
+                    <h3 className="text-xl font-semibold text-gray-800 mt-4 border-b pb-3 mb-4">Contact Information</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <ModernInput
                             label="Company Phone"
@@ -585,14 +686,12 @@ const SettingsPage = () => {
                         </div>
                     </div>
 
-                    <h3 className="text-xl font-semibold text-gray-800 mt-4">Address Details</h3>
+                    <h3 className="text-xl font-semibold text-gray-800 mt-4 border-b pb-3 mb-4">Address Details</h3>
                     <AddressInput
                         label="Company Address"
                         address={localSettings.companyAddress}
                         onChange={handleCompanyAddressChange}
                         fieldName="companyAddress"
-                        // isMapsLoaded={isMapsLoaded} // Should be passed from AppContent if needed
-                        // isMapsLoadError={isMapsLoadError} // Should be passed from AppContent if needed
                     />
 
                     <ModernInput
@@ -604,7 +703,7 @@ const SettingsPage = () => {
                     />
 
                     {/* NEW: Invoice Settings Section */}
-                    <h3 className="text-xl font-semibold text-gray-800 mt-4">Invoice Settings</h3>
+                    <h3 className="text-xl font-semibold text-gray-800 mt-4 border-b pb-3 mb-4">Invoice Settings</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <ModernInput
                             label="Invoice Prefix"
@@ -625,10 +724,10 @@ const SettingsPage = () => {
                         <ModernInput
                             label="Default Tax Rate (%)"
                             name="defaultTaxRate"
-                            value={localSettings.defaultTaxRate * 100}
+                            value={localSettings.defaultTaxRate * 100} // Display as percentage (e.g., 20 instead of 0.2)
                             onChange={(e) => {
                                 const value = parseFloat(e.target.value);
-                                handleInvoiceSettingsChange({ target: { name: 'defaultTaxRate', value: value / 100 } });
+                                handleInvoiceSettingsChange({ target: { name: 'defaultTaxRate', value: value / 100 } }); // Store as 0.XX
                             }}
                             type="number"
                             min="0"
@@ -636,6 +735,137 @@ const SettingsPage = () => {
                             step="0.01"
                             helpText="Enter the default tax rate as a percentage (e.g., 20 for 20% VAT)."
                         />
+                    </div>
+
+                    {/* NEW: Email Automation Settings Section - Re-added as per user request */}
+                    <h3 className="text-xl font-semibold text-gray-800 mt-4 border-b pb-3 mb-4">Email Automation Settings</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Welcome Email */}
+                        <div className="col-span-1 flex items-center">
+                            <label className="flex items-center space-x-2 text-gray-700 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    name="welcome_email.enabled"
+                                    checked={localSettings.emailAutomation.welcome_email.enabled}
+                                    onChange={handleEmailAutomationChange}
+                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                />
+                                <span>Enable Welcome Email</span>
+                            </label>
+                            <p className="ml-4 text-sm text-gray-500">(Sent on user/client creation)</p>
+                        </div>
+
+                        {/* Invoice Email */}
+                        <div className="col-span-1 flex items-center">
+                            <label className="flex items-center space-x-2 text-gray-700 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    name="invoice_email.enabled"
+                                    checked={localSettings.emailAutomation.invoice_email.enabled}
+                                    onChange={handleEmailAutomationChange}
+                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                />
+                                <span>Enable Invoice Emails</span>
+                            </label>
+                            <p className="ml-4 text-sm text-gray-500">(Sent when an invoice is created/sent)</p>
+                        </div>
+
+                        {/* Appointment Reminder */}
+                        <div className="col-span-1 flex flex-col">
+                            <label className="flex items-center space-x-2 text-gray-700 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    name="appointment_reminder.enabled"
+                                    checked={localSettings.emailAutomation.appointment_reminder.enabled}
+                                    onChange={handleEmailAutomationChange}
+                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                />
+                                <span>Enable Appointment Reminders</span>
+                            </label>
+                            {localSettings.emailAutomation.appointment_reminder.enabled && (
+                                <ModernInput
+                                    label="Days Before Appointment"
+                                    name="appointment_reminder.daysBefore"
+                                    type="number"
+                                    value={localSettings.emailAutomation.appointment_reminder.daysBefore}
+                                    onChange={handleEmailAutomationChange}
+                                    min="0"
+                                    className="mt-2"
+                                    helpText="Send reminder this many days before the appointment."
+                                />
+                            )}
+                        </div>
+
+                        {/* Job Completion */}
+                        <div className="col-span-1 flex items-center">
+                            <label className="flex items-center space-x-2 text-gray-700 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    name="job_completion.enabled"
+                                    checked={localSettings.emailAutomation.job_completion.enabled}
+                                    onChange={handleEmailAutomationChange}
+                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                />
+                                <span>Enable Job Completion Emails</span>
+                            </label>
+                            <p className="ml-4 text-sm text-gray-500">(Sent when a job is marked complete)</p>
+                        </div>
+
+                        {/* Invoice Reminder */}
+                        <div className="col-span-1 flex flex-col">
+                            <label className="flex items-center space-x-2 text-gray-700 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    name="invoice_reminder.enabled"
+                                    checked={localSettings.emailAutomation.invoice_reminder.enabled}
+                                    onChange={handleEmailAutomationChange}
+                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                />
+                                <span>Enable Invoice Reminders</span>
+                            </label>
+                            {localSettings.emailAutomation.invoice_reminder.enabled && (
+                                <ModernInput
+                                    label="Days After Due Date"
+                                    name="invoice_reminder.daysAfter"
+                                    type="number"
+                                    value={localSettings.emailAutomation.invoice_reminder.daysAfter}
+                                    onChange={handleEmailAutomationChange}
+                                    min="0"
+                                    required
+                                    placeholder="e.g., 7 days"
+                                    className="mt-2"
+                                    helpText="Send reminder this many days after invoice due date."
+                                />
+                            )}
+                        </div>
+
+                        {/* Review Request */}
+                        <div className="col-span-1 flex flex-col">
+                            <label className="flex items-center space-x-2 text-gray-700 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    name="review_request.enabled"
+                                    checked={localSettings.emailAutomation.review_request.enabled}
+                                    onChange={handleEmailAutomationChange}
+                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                />
+                                <span>Enable Review Requests</span>
+                            </label>
+                            {localSettings.emailAutomation.review_request.enabled && (
+                                <ModernInput
+                                    label="Days After Job Completion"
+                                    name="review_request.daysAfter"
+                                    type="number"
+                                    value={localSettings.emailAutomation.review_request.daysAfter}
+                                    onChange={handleEmailAutomationChange}
+                                    min="0"
+                                    required
+                                    placeholder="e.g., 3 days"
+                                    className="mt-2"
+                                    helpText="Send review request this many days after job completion."
+                                />
+                            )}
+                        </div>
                     </div>
 
 
@@ -654,7 +884,7 @@ const SettingsPage = () => {
             {/* Tab Content: Currency Preferences */}
             {activeTab === 'currency' && (
                 <form onSubmit={handleSaveCompanySettings} className="p-6 border rounded-lg bg-gray-50/80 space-y-6">
-                    <h3 className="text-xl font-semibold text-gray-800 mb-4">Currency Preferences</h3>
+                    <h3 className="text-xl font-semibold text-gray-800 mb-4 border-b pb-3">Currency Preferences</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <ModernSelect
                             label="Currency Code"

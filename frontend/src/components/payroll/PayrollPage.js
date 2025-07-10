@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../utils/api';
 import Loader from '../common/Loader';
 import { toast } from 'react-toastify';
-import { Users, Calendar, Calculator, FileText } from 'lucide-react';
+import { Users, Calendar, Calculator, FileText, Download, Archive, BookText } from 'lucide-react'; // Added BookText icon
+import { format } from 'date-fns'; // Make sure format is imported
 
 import ModernInput from '../common/ModernInput';
 import ModernSelect from '../common/ModernSelect';
@@ -19,8 +20,10 @@ const PayrollPage = () => {
     const [isLoadingCalculation, setIsLoadingCalculation] = useState(false);
     const [staffError, setStaffError] = useState(null);
     const [calculationError, setCalculationError] = useState(null);
+    const [isBulkDownloading, setIsBulkDownloading] = useState(false);
+    const [isLoadingReport, setIsLoadingReport] = useState(false); // New state for report loading
 
-    // NEW STATES for Payslip View Modal
+    // States for Payslip View Modal
     const [isPayslipModalOpen, setIsPayslipModalOpen] = useState(false);
     const [selectedPayslipId, setSelectedPayslipId] = useState(null);
 
@@ -98,17 +101,131 @@ const PayrollPage = () => {
         }
     }, [startDate, endDate, selectedStaffIds]);
 
-    // NEW: Handler to open Payslip View Modal
+    // Handler to open Payslip View Modal
     const handleViewPayslip = useCallback((payslipId) => {
         setSelectedPayslipId(payslipId);
         setIsPayslipModalOpen(true);
     }, []);
 
-    // NEW: Handler to close Payslip View Modal
+    // Handler to close Payslip View Modal
     const handleClosePayslipModal = useCallback(() => {
         setIsPayslipModalOpen(false);
         setSelectedPayslipId(null);
     }, []);
+
+    // Handle Bulk PDF download
+    const handleBulkDownloadPdf = useCallback(async () => {
+        setIsBulkDownloading(true);
+        setCalculationError(null); // Clear previous errors
+
+        if (!startDate || !endDate) {
+            setCalculationError('Please select both a start date and an end date for the pay period for bulk download.');
+            setIsBulkDownloading(false);
+            return;
+        }
+        if (selectedStaffIds.length === 0) {
+            setCalculationError('Please select at least one staff member for bulk download.');
+            setIsBulkDownloading(false);
+            return;
+        }
+
+        try {
+            const res = await api.get('/payroll/payslips/bulk-download', {
+                params: {
+                    startDate,
+                    endDate,
+                    staffIds: selectedStaffIds.join(','), // Send as comma-separated string
+                },
+                responseType: 'blob' // Important: tell Axios to expect a binary blob
+            });
+
+            const blob = new Blob([res.data], { type: 'application/zip' });
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.setAttribute('download', `payslips_payroll_${format(new Date(startDate), 'yyyyMMdd')}_to_${format(new Date(endDate), 'yyyyMMdd')}.zip`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(downloadUrl);
+
+            toast.success('Selected payslips downloaded as ZIP!');
+        } catch (err) {
+            console.error('Error bulk downloading payslips:', err);
+            setCalculationError(err.response?.data?.message || 'Failed to bulk download payslips. Please try again.');
+            toast.error(err.response?.data?.message || 'Failed to bulk download payslips.');
+        } finally {
+            setIsBulkDownloading(false);
+        }
+    }, [startDate, endDate, selectedStaffIds]);
+
+    // NEW: Handle Generate Accountant Report - Modified to handle PDF download
+    const handleGenerateAccountantReport = useCallback(async () => {
+        setIsLoadingReport(true);
+        setCalculationError(null); // Clear previous errors
+
+        if (!startDate || !endDate) {
+            setCalculationError('Please select both a start date and an end date for the accountant report.');
+            setIsLoadingReport(false);
+            return;
+        }
+        // Staff selection is optional for accountant report, so no error if selectedStaffIds is empty
+
+        try {
+            const params = {
+                startDate,
+                endDate,
+            };
+            if (selectedStaffIds.length > 0) {
+                params.staffIds = selectedStaffIds.join(',');
+            }
+
+            const res = await api.get('/payroll/report/summary', {
+                params,
+                responseType: 'blob' // <--- IMPORTANT: Expect a binary blob (PDF)
+            });
+
+            // Create a Blob from the PDF data
+            const blob = new Blob([res.data], { type: 'application/pdf' });
+            
+            // Create a link element, set the download filename, and click it
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            // The backend sets Content-Disposition, but setting a fallback filename here is good practice
+            link.setAttribute('download', `Payroll_Summary_Report_${format(new Date(startDate), 'yyyyMMdd')}_to_${format(new Date(endDate), 'yyyyMMdd')}.pdf`); 
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(downloadUrl); // Clean up the URL
+
+            toast.success('Accountant Report downloaded successfully!');
+        } catch (err) {
+            console.error('Error generating accountant report:', err);
+            // Handle error response if it's not a blob (e.g., JSON error from backend)
+            let errorMessage = 'Failed to generate accountant report. Please try again.';
+            if (err.response && err.response.data instanceof Blob) {
+                // If it's an error blob, try to read it as text
+                const reader = new FileReader();
+                reader.onload = function() {
+                    try {
+                        const errorJson = JSON.parse(reader.result);
+                        errorMessage = errorJson.message || errorMessage;
+                    } catch (e) {
+                        // Not valid JSON, just use generic message
+                    }
+                    setCalculationError(errorMessage);
+                    toast.error(errorMessage);
+                };
+                reader.readAsText(err.response.data);
+            } else {
+                setCalculationError(err.response?.data?.message || errorMessage);
+                toast.error(err.response?.data?.message || errorMessage);
+            }
+        } finally {
+            setIsLoadingReport(false);
+        }
+    }, [startDate, endDate, selectedStaffIds]);
 
 
     const getStatusClasses = (status) => {
@@ -174,7 +291,7 @@ const PayrollPage = () => {
                                     type="checkbox"
                                     className="form-checkbox"
                                     onChange={handleSelectAllStaff}
-                                    checked={selectedStaffIds.length === staffList.length}
+                                    checked={selectedStaffIds.length === staffList.length && staffList.length > 0} // Ensure staffList is not empty
                                 />
                                 <span className="ml-2 text-gray-700 font-medium">Select All</span>
                             </label>
@@ -197,15 +314,36 @@ const PayrollPage = () => {
                 </div>
             </div>
 
-            <div className="text-center mb-8">
+            <div className="text-center mb-8 flex justify-center gap-4 flex-wrap">
                 <button
                     onClick={handleCalculatePayroll}
                     disabled={isLoadingCalculation || !startDate || !endDate || selectedStaffIds.length === 0}
-                    className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 shadow-md text-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mx-auto"
+                    className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 shadow-md text-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                 >
                     {isLoadingCalculation ? <Loader className="animate-spin mr-3" size={24} /> : <Calculator className="mr-3" />}
                     Calculate Payroll
                 </button>
+
+                {payrollSummary && payrollSummary.length > 0 && (
+                    <>
+                        <button
+                            onClick={handleBulkDownloadPdf}
+                            disabled={isBulkDownloading || !startDate || !endDate || selectedStaffIds.length === 0}
+                            className="px-8 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200 shadow-md text-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                        >
+                            {isBulkDownloading ? <Loader className="animate-spin mr-3" size={24} /> : <Archive className="mr-3" />}
+                            Download All Payslips
+                        </button>
+                        <button
+                            onClick={handleGenerateAccountantReport}
+                            disabled={isLoadingReport || !startDate || !endDate} // Staff selection is optional for this report
+                            className="px-8 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors duration-200 shadow-md text-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                        >
+                            {isLoadingReport ? <Loader className="animate-spin mr-3" size={24} /> : <BookText className="mr-3" />}
+                            Generate Accountant Report
+                        </button>
+                    </>
+                )}
             </div>
 
             {payrollSummary && payrollSummary.length > 0 && (
@@ -228,7 +366,7 @@ const PayrollPage = () => {
                                 {payrollSummary.map(entry => (
                                     <tr 
                                         key={entry.payslipId} 
-                                        className="hover:bg-blue-50" // Removed cursor-pointer from tr to avoid double clickability
+                                        className="hover:bg-blue-50" 
                                     >
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{entry.staffName}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{entry.payRateType}</td>
@@ -242,7 +380,7 @@ const PayrollPage = () => {
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-green-700">£{entry.grossPay.toFixed(2)}</td>
                                         <td className="px-6 py-4 text-center whitespace-nowrap">
                                             <button 
-                                                onClick={(e) => { e.stopPropagation(); handleViewPayslip(entry.payslipId); }} // Stop propagation
+                                                onClick={(e) => { e.stopPropagation(); handleViewPayslip(entry.payslipId); }} 
                                                 className="text-blue-600 hover:text-blue-800 font-medium text-sm"
                                                 title="View Payslip"
                                             >

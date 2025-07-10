@@ -40,7 +40,9 @@ const InvoiceSchema = new mongoose.Schema({
     job: {
         type: mongoose.Schema.ObjectId,
         ref: 'Job',
-        required: true,
+        // required: true, // <-- THIS LINE IS THE FIX. It is now removed.
+        // A job is no longer required, allowing for stock-only invoices.
+        default: null,
     },
     invoiceNumber: {
         type: String,
@@ -86,6 +88,10 @@ const InvoiceSchema = new mongoose.Schema({
     currency: {
         code: { type: String, default: 'GBP' },
         symbol: { type: String, default: '£' },
+    },
+    lastInvoiceReminderSent: {
+        type: Date,
+        default: null,
     },
 }, {
     timestamps: true,

@@ -1,18 +1,24 @@
 // src/components/staffPortal/StaffJobCard.jsx
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { MapPin, Clock, CheckCircle2, XCircle, ChevronRight, Image, Box, ListChecks, Loader as LoaderIcon } from 'lucide-react';
 import api from '../../utils/api';
 import { format } from 'date-fns';
 import JobDetailsModal from './JobDetailsModal';
 import StockReturnModal from './StockReturnModal';
-import { getCurrentPosition } from '../../utils/helpers';
 
 const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
+    // --- DEBUG LOG ---
+    // This will show us the exact job data the component is receiving.
+    useEffect(() => {
+        console.log(`[StaffJobCard] Received job data for service "${job.serviceType}":`, job);
+    }, [job]);
+    // --- END DEBUG LOG ---
+
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isStockReturnModalOpen, setIsStockReturnModalOpen] = useState(false);
     const [actionLoading, setActionLoading] = useState(null);
-    const [stockReturnNewStatus, setStockReturnNewStatus] = useState('');
+    const [statusToApply, setStatusToApply] = useState('');
 
     const formatTime = (timeString) => {
         if (!timeString) return 'N/A';
@@ -31,9 +37,7 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
         setActionLoading('clockIn');
         try {
             const res = await api.put(`/jobs/${job._id}/clock-in`);
-            // FIX: Backend returns the job object directly for clock-in/out
-            onJobUpdated(res.data); // <--- CHANGED FROM res.data.job
-            console.log('Clocked in successfully! Received job:', res.data);
+            onJobUpdated(res.data);
         } catch (err) {
             console.error("Error clocking in:", err);
             onActionError(err);
@@ -46,9 +50,7 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
         setActionLoading('clockOut');
         try {
             const res = await api.put(`/jobs/${job._id}/clock-out`);
-            // FIX: Backend returns the job object directly for clock-in/out
-            onJobUpdated(res.data); // <--- CHANGED FROM res.data.job
-            console.log('Clocked out successfully! Received job:', res.data);
+            onJobUpdated(res.data);
         } catch (err) {
             console.error("Error clocking out:", err);
             onActionError(err);
@@ -57,18 +59,17 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
         }
     }, [job._id, onJobUpdated, onActionError]);
 
-    const handleReturnStockAndComplete = useCallback(async (jobToUpdate, returnedStockData, statusToApply) => {
+    const handleReturnStockAndComplete = useCallback(async (jobToUpdate, returnedStockData, newStatus) => {
         setActionLoading('complete');
-        setIsStockReturnModalOpen(false); // Close the modal
+        setIsStockReturnModalOpen(false);
 
         try {
-            const res = await api.post(`/jobs/${jobToUpdate._id}/return-stock`, {
+            const payload = {
                 returnedStockItems: Object.entries(returnedStockData).map(([stockId, quantity]) => ({ stockId, quantity })),
-                newStatus: statusToApply,
-            });
-            // This one is correct, as backend returns { message: ..., job: ... }
+                newStatus: newStatus,
+            };
+            const res = await api.post(`/jobs/${jobToUpdate._id}/return-stock`, payload);
             onJobUpdated(res.data.job);
-            console.log(`Job marked as ${statusToApply} and stock updated! Received job:`, res.data.job);
         } catch (err) {
             console.error("Error completing job or returning stock:", err);
             onActionError(err);
@@ -77,20 +78,21 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
         }
     }, [onJobUpdated, onActionError]);
 
-    const handleCompleteJobClick = useCallback((statusAfterReturn = 'Completed') => {
+    const handleCompleteJobClick = useCallback(() => {
+        const finalStatus = 'Completed';
+        // This is the check that determines if the modal should open.
         if (job.usedStock && job.usedStock.length > 0) {
-            setStockReturnNewStatus(statusAfterReturn);
+            setStatusToApply(finalStatus);
             setIsStockReturnModalOpen(true);
         } else {
-            handleReturnStockAndComplete(job, {}, statusAfterReturn);
+            // If no stock is used, complete the job directly.
+            handleReturnStockAndComplete(job, {}, finalStatus);
         }
     }, [job, handleReturnStockAndComplete]);
 
     const isClockedIn = !!job.clockInTime;
     const isClockedOut = !!job.clockOutTime;
     const isCompleted = job.status === 'Completed';
-    const isInProgress = job.status === 'In Progress';
-    const isPendingCompletion = job.status === 'Pending Completion';
 
     return (
         <div className="bg-white p-5 rounded-lg shadow-md border border-gray-200">
@@ -109,9 +111,9 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
 
             <span className={`px-3 py-1 rounded-full text-sm font-semibold mb-4 inline-block
                 ${isCompleted ? 'bg-green-100 text-green-800' :
-                  isInProgress ? 'bg-yellow-100 text-yellow-800' :
-                  isPendingCompletion ? 'bg-orange-100 text-orange-800' :
-                  'bg-blue-100 text-blue-800'}`}>
+                job.status === 'In Progress' ? 'bg-yellow-100 text-yellow-800' :
+                job.status === 'Pending Completion' ? 'bg-orange-100 text-orange-800' :
+                'bg-blue-100 text-blue-800'}`}>
                 Status: {job.status}
             </span>
 
@@ -160,7 +162,7 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
                 
                 {isClockedOut && !isCompleted && (
                     <button
-                        onClick={() => handleCompleteJobClick()}
+                        onClick={handleCompleteJobClick}
                         disabled={actionLoading === 'complete'}
                         className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -183,10 +185,11 @@ const StaffJobCard = ({ job, onJobUpdated, onActionError }) => {
                 onClose={() => setIsStockReturnModalOpen(false)}
                 job={job}
                 onReturn={handleReturnStockAndComplete}
-                newStatus={stockReturnNewStatus}
+                newStatus={statusToApply}
             />
         </div>
     );
 };
 
 export default StaffJobCard;
+

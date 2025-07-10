@@ -4,6 +4,7 @@ import React, { useState, useLayoutEffect, createContext, useContext } from 'rea
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/context/AuthContext';
 import { CurrencyProvider } from './components/context/CurrencyContext';
+// REMOVED: ChatProvider import
 
 // --- COMPONENT IMPORTS ---
 import LoginPage from './components/auth/LoginPage';
@@ -27,12 +28,10 @@ import RoutePlannerView from './components/route-planner/RoutePlannerView';
 import StaffAbsencePage from './components/staff/StaffAbsencePage';
 import InvoicePage from './components/invoices/InvoicePage';
 import InvoiceDetails from './components/invoices/InvoiceDetails';
-
 import StaffSchedulePage from './components/staffPortal/StaffSchedulePage';
+import PayrollPage from './components/payroll/PayrollPage';
 
-// NEW: Import PayrollPage
-import PayrollPage from './components/payroll/PayrollPage'; // <--- ADD THIS IMPORT
-
+// REMOVED: Chat Component Imports
 
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -150,12 +149,14 @@ function AppContent() {
                         <Route path="/staff-absence" element={<PrivateRoute roles={['admin', 'manager']}><StaffAbsencePage /></PrivateRoute>} />
                         <Route path="/email-templates" element={<PrivateRoute roles={['admin']}><EmailTemplatesView /></PrivateRoute>} />
 
+                        {/* REMOVED: Admin and Staff Chat Routes */}
+
                         {/* --- INVOICE ROUTES --- */}
                         <Route path="/invoices" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><InvoicePage /></PrivateRoute>} />
                         <Route path="/invoices/:invoiceId" element={<PrivateRoute roles={['admin', 'manager', 'staff']}><InvoiceDetails /></PrivateRoute>} />
                         
                         {/* NEW: Payroll Page Route - Replaces old placeholder */}
-                        <Route path="/payroll" element={<PrivateRoute roles={['admin', 'manager']}><PayrollPage /></PrivateRoute>} /> {/* <--- UPDATED THIS ROUTE */}
+                        <Route path="/payroll" element={<PrivateRoute roles={['admin', 'manager']}><PayrollPage /></PrivateRoute>} />
                         
                         <Route path="/jobs" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><div className="p-8">Job Management Page</div></PrivateRoute>} />
                         <Route path="/quotes" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><div className="p-8">Quotes Page</div></PrivateRoute>} />
@@ -175,6 +176,7 @@ function App() {
         <Router>
             <AuthProvider>
                 <CurrencyProvider>
+                    {/* REMOVED: ChatProvider wrapper */}
                     <MapsApiProvider>
                         <AppContent />
                     </MapsApiProvider>

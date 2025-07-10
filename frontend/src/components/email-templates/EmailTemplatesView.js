@@ -6,15 +6,18 @@ import Modal from '../common/Modal';
 import Loader from '../common/Loader';
 
 const TEMPLATE_TYPES = [
-    { id: 'welcome_email', defaultName: 'Welcome Email', description: 'Sent to new customers upon signup.' },
+    // Clarified Welcome Email for Customer
+    { id: 'customer_welcome_email', defaultName: 'Customer Welcome Email', description: 'Sent to new customers upon addition.' }, // <--- MODIFIED THIS LINE
     { id: 'appointment_reminder', defaultName: 'Appointment Reminder', description: 'Reminds customers about upcoming jobs.' },
     { id: 'job_completion', defaultName: 'Job Completion', description: 'Notifies customer that a job is complete.' },
     { id: 'invoice_email', defaultName: 'Invoice Email', description: 'Sends the invoice link or PDF.' },
     { id: 'invoice_reminder', defaultName: 'Invoice Reminder', description: 'Reminds customers about outstanding invoices.' },
     { id: 'review_request', defaultName: 'Review Request', description: 'Asks customers to leave a review after a job.' },
+    // New: Quote Email
+    { id: 'quote_email', defaultName: 'Quote Email', description: 'Sends the quote link or details to customers.' }, // <--- ADDED THIS LINE
     { id: 'invoice_template', defaultName: 'Invoice Template', description: 'Template for general invoice display/email.' },
-    // NEW: Staff Welcome Email Template Type
-    { id: 'staff_welcome_email', defaultName: 'Staff Welcome Email', description: 'Sent to new staff members to set up their account.' }, // <--- ADD THIS LINE
+    // Staff Welcome Email Template Type (already exists)
+    { id: 'staff_welcome_email', defaultName: 'Staff Welcome Email', description: 'Sent to new staff members to set up their account.' },
 ];
 
 const EmailTemplatesView = () => {
@@ -40,7 +43,7 @@ const EmailTemplatesView = () => {
             const finalTemplates = TEMPLATE_TYPES.map(defaultType => {
                 const dbTemplate = dbTemplatesMap.get(defaultType.id);
                 return dbTemplate ? { ...dbTemplate, description: defaultType.description } : {
-                    id: defaultType.id,
+                    id: defaultType.id, // Use id for internal mapping, templateType for DB
                     templateType: defaultType.id,
                     name: defaultType.defaultName,
                     subject: `Default ${defaultType.defaultName} Subject`,
@@ -160,7 +163,6 @@ const EmailTemplatesView = () => {
 
             <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={`Edit ${editingTemplate?.name || ''}`}>
                 <div className="p-6 space-y-4">
-                    {/* Add content of your modal form fields here if not already */}
                     <ModernInput
                         label="Template Name"
                         value={templateName}
@@ -173,7 +175,6 @@ const EmailTemplatesView = () => {
                         onChange={(e) => setTemplateSubject(e.target.value)}
                         required
                     />
-                    {/* For the body, consider a textarea or rich text editor */}
                     <label className="block text-sm font-medium text-gray-700 mb-1">Email Body</label>
                     <textarea
                         value={templateBody}

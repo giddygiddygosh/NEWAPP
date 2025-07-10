@@ -25,21 +25,32 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
         leadStatus: initialData?.leadStatus || 'New',
         commissionEarned: initialData?.commissionEarned || 0, // Common with customer
         // Customer-specific fields
-        serviceAddresses: initialData?.serviceAddresses || [],
+        serviceAddresses: (initialData?.serviceAddresses || []).map(addr => ({ ...addr, payType: addr.payType || '', amount: addr.amount || 0 })),
         convertedFromLead: initialData?.convertedFromLead || null,
         customerType: initialData?.customerType || '',
         industry: initialData?.industry || '',
         // Staff-specific fields
         role: initialData?.role || 'staff',
         employeeId: initialData?.employeeId || '',
-        salesPersonName: initialData?.salesPersonName || '', // Common with lead/customer
-        // --- NEW STAFF PAYROLL FIELDS INITIALIZATION ---
+        salesPersonName: initialData?.salesPersonName || '',
+        // Payroll fields for Staff (already existing)
         payRateType: initialData?.payRateType || 'Hourly',
         hourlyRate: initialData?.hourlyRate || 0,
         jobFixedAmount: initialData?.jobFixedAmount || 0,
         jobPercentage: initialData?.jobPercentage || 0,
         dailyClockInThresholdMins: initialData?.dailyClockInThresholdMins || 480,
-        // --- END NEW STAFF PAYROLL FIELDS ---
+        // --- CUSTOMER EMAIL AUTOMATION FIELDS INITIALIZATION ---
+        sendWelcomeEmail: initialData?.sendWelcomeEmail ?? true, // Default to true
+        sendInvoiceEmail: initialData?.sendInvoiceEmail ?? true, // Default to true (as per screenshot)
+        invoiceEmailTrigger: initialData?.invoiceEmailTrigger || 'On Completion',
+        invoicePatternStartDate: initialData?.invoicePatternStartDate ? new Date(initialData.invoicePatternStartDate).toISOString().split('T')[0] : '', // Format date for input type="date"
+        sendInvoiceReminderEmail: initialData?.sendInvoiceReminderEmail ?? false, // Default to false (as per screenshot)
+        invoiceReminderDaysOffset: initialData?.invoiceReminderDaysOffset || 7,
+        sendReviewRequestEmail: initialData?.sendReviewRequestEmail ?? false, // Default to false (as per screenshot)
+        reviewRequestDaysOffset: initialData?.reviewRequestDaysOffset || 3,
+        sendAppointmentReminderEmail: initialData?.sendAppointmentReminderEmail ?? true, // Default to true
+        sendQuoteEmail: initialData?.sendQuoteEmail ?? true,
+        // --- END CUSTOMER EMAIL AUTOMATION FIELDS ---
     });
 
     const [saving, setSaving] = useState(false);
@@ -87,12 +98,23 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
         { value: 'Hourly', label: 'Hourly' },
     ];
 
-    // --- NEW: Pay Rate Type Options for Staff ---
-    const staffPayRateTypeOptions = [
+    const staffPayRateTypeOptions = [ // For Staff (existing)
         { value: 'Hourly', label: 'Hourly' },
         { value: 'Fixed per Job', label: 'Fixed per Job' },
         { value: 'Percentage per Job', label: 'Percentage per Job' },
         { value: 'Daily Rate', label: 'Daily Rate' },
+    ];
+
+    // Define patterned triggers to conditionally show date picker
+    const patternedInvoiceTriggers = ['Weekly', 'Bi-Weekly', '4-Weekly', 'Monthly'];
+
+    // --- Invoice Email Trigger Options for Customers ---
+    const invoiceEmailTriggerOptions = [
+        { value: 'On Completion', label: 'On Job Completion' },
+        { value: 'Weekly', label: 'Weekly' },
+        { value: 'Bi-Weekly', label: 'Bi-Weekly' },
+        { value: '4-Weekly', label: 'Every 4 Weeks' },
+        { value: 'Monthly', label: 'Monthly' },
     ];
     // --- END NEW ---
 
@@ -107,22 +129,30 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                 leadSource: initialData?.leadSource || 'Website',
                 leadStatus: initialData?.leadStatus || (type === 'lead' ? 'New' : ''),
                 commissionEarned: initialData?.commissionEarned || 0,
-                serviceAddresses: (type === 'customer' && initialData?.serviceAddresses?.length)
-                    ? initialData.serviceAddresses.map(addr => ({ ...addr, payType: addr.payType || '', amount: addr.amount || 0 }))
-                    : (type === 'customer' && (initialData?.convertedFromLead || !initialData) ? [{ payType: '', amount: 0 }] : []),
+                serviceAddresses: (initialData?.serviceAddresses || []).map(addr => ({ ...addr, payType: addr.payType || '', amount: addr.amount || 0 })),
                 convertedFromLead: initialData?.convertedFromLead || null,
                 customerType: initialData?.customerType || '',
                 industry: initialData?.industry || '',
                 role: initialData?.role || 'staff',
                 employeeId: initialData?.employeeId || '',
                 salesPersonName: initialData?.salesPersonName || '',
-                // --- NEW STAFF PAYROLL FIELDS RESET/INITIALIZATION ON OPEN ---
                 payRateType: initialData?.payRateType || 'Hourly',
                 hourlyRate: initialData?.hourlyRate || 0,
                 jobFixedAmount: initialData?.jobFixedAmount || 0,
                 jobPercentage: initialData?.jobPercentage || 0,
                 dailyClockInThresholdMins: initialData?.dailyClockInThresholdMins || 480,
-                // --- END NEW STAFF PAYROLL FIELDS ---
+                // --- CUSTOMER EMAIL AUTOMATION FIELDS RESET/INITIALIZATION ON OPEN ---
+                sendWelcomeEmail: initialData?.sendWelcomeEmail ?? true,
+                sendInvoiceEmail: initialData?.sendInvoiceEmail ?? true,
+                invoiceEmailTrigger: initialData?.invoiceEmailTrigger || 'On Completion',
+                invoicePatternStartDate: initialData?.invoicePatternStartDate ? new Date(initialData.invoicePatternStartDate).toISOString().split('T')[0] : '',
+                sendInvoiceReminderEmail: initialData?.sendInvoiceReminderEmail ?? false, // Matches current UI default
+                invoiceReminderDaysOffset: initialData?.invoiceReminderDaysOffset || 7,
+                sendReviewRequestEmail: initialData?.sendReviewRequestEmail ?? false, // Matches current UI default
+                reviewRequestDaysOffset: initialData?.reviewRequestDaysOffset || 3,
+                sendAppointmentReminderEmail: initialData?.sendAppointmentReminderEmail ?? true,
+                sendQuoteEmail: initialData?.sendQuoteEmail ?? true,
+                // --- END CUSTOMER EMAIL AUTOMATION FIELDS ---
             });
             setError(null);
             setSuccessMessage(null);
@@ -130,8 +160,14 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
     }, [initialData, isOpen, type]);
 
     const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        const { name, value, type: inputType, checked } = e.target;
+        // --- TEST LOG FROM FRONTEND ---
+        console.log('THIS IS A TEST FROM FRONTEND. Name:', name, 'Value:', value, 'Checked:', checked);
+        // --- END TEST LOG ---
+        setFormData(prev => ({
+            ...prev,
+            [name]: inputType === 'checkbox' ? checked : value
+        }));
     };
 
     const handleAddressChange = useCallback((newAddressObject) => {
@@ -179,7 +215,7 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
             }
             if (newPhones[index].number.length > 0 && !newPhones.some(p => p.isMaster)) {
                 newPhones[index].isMaster = true;
-              }
+            }
             return { ...prev, phones: newPhones };
         });
     }, []);
@@ -265,9 +301,11 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
         setSuccessMessage(null);
 
         const isEmailArrayEmpty = formData.emails.filter(e => e.email.trim() !== '').length === 0;
+        const masterEmail = formData.emails.find(e => e.isMaster)?.email || formData.emails[0]?.email;
 
-        if (!formData.contactPersonName || isEmailArrayEmpty) {
-            setError('Contact Person Name and at least one valid Email address are required.');
+
+        if (!formData.contactPersonName || !masterEmail) { // Ensure master email is present
+            setError('Contact Person Name and a Master Email address are required.');
             setSaving(false);
             return;
         }
@@ -278,20 +316,41 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
         }
 
         try {
-            let response; // Declare response here
-            const dataToSave = { ...formData };
+            let response; // Declare 'response' once here!
+            const dataToSave = { ...formData }; // Start with a copy of formData
+
+            // Clean up and format emails/phones arrays
+            dataToSave.email = formData.emails.filter(e => e.email.trim() !== '');
+            dataToSave.phone = formData.phones.filter(p => p.number.trim() !== '');
+
+            // Convert number inputs to actual numbers for submission
+            dataToSave.hourlyRate = parseFloat(formData.hourlyRate) || 0;
+            dataToSave.jobFixedAmount = parseFloat(formData.jobFixedAmount) || 0;
+            dataToSave.jobPercentage = parseFloat(formData.jobPercentage) || 0;
+            dataToSave.dailyClockInThresholdMins = parseInt(formData.dailyClockInThresholdMins) || 0;
+            // Customer email preference number inputs
+            dataToSave.invoiceReminderDaysOffset = parseInt(formData.invoiceReminderDaysOffset) || 0;
+            dataToSave.reviewRequestDaysOffset = parseInt(formData.reviewRequestDaysOffset) || 0;
+            dataToSave.appointmentReminderDaysOffset = parseInt(formData.appointmentReminderDaysOffset) || 0;
+
+            // --- START DEBUG LOGGING FOR CUSTOMER EMAIL FIELDS ---
+            console.log('--- FRONTEND PAYLOAD BEFORE SENDING (Customer) ---');
+            console.log('sendWelcomeEmail:', dataToSave.sendWelcomeEmail);
+            console.log('sendInvoiceEmail:', dataToSave.sendInvoiceEmail);
+            console.log('invoiceEmailTrigger:', dataToSave.invoiceEmailTrigger);
+            console.log('invoicePatternStartDate:', dataToSave.invoicePatternStartDate);
+            console.log('sendInvoiceReminderEmail:', dataToSave.sendInvoiceReminderEmail);
+            console.log('invoiceReminderDaysOffset:', dataToSave.invoiceReminderDaysOffset);
+            console.log('sendReviewRequestEmail:', dataToSave.sendReviewRequestEmail);
+            console.log('reviewRequestDaysOffset:', dataToSave.reviewRequestDaysOffset);
+            console.log('sendAppointmentReminderEmail:', dataToSave.sendAppointmentReminderEmail);
+            console.log('appointmentReminderDaysOffset:', dataToSave.appointmentReminderDaysOffset);
+            console.log('sendQuoteEmail:', dataToSave.sendQuoteEmail);
+            console.log('--- END FRONTEND PAYLOAD ---');
+            // --- END DEBUG LOGGING ---
+
 
             if (type === 'staff') {
-                dataToSave.email = formData.emails.find(e => e.isMaster)?.email || formData.emails[0]?.email || '';
-                dataToSave.phone = formData.phones.find(p => p.isMaster)?.number || formData.phones[0]?.number || '';
-                // Ensure pay rate numbers are parsed as floats/numbers
-                dataToSave.hourlyRate = parseFloat(formData.hourlyRate) || 0;
-                dataToSave.jobFixedAmount = parseFloat(formData.jobFixedAmount) || 0;
-                dataToSave.jobPercentage = parseFloat(formData.jobPercentage) || 0;
-                dataToSave.dailyClockInThresholdMins = parseInt(formData.dailyClockInThresholdMins) || 0;
-
-
-                // Don't delete payroll fields here as they are relevant for staff
                 delete dataToSave.companyName;
                 delete dataToSave.leadSource;
                 delete dataToSave.leadStatus;
@@ -301,6 +360,18 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                 delete dataToSave.customerType;
                 delete dataToSave.industry;
                 delete dataToSave.salesPersonName;
+                // Delete customer email preference fields if they somehow sneaked in
+                delete dataToSave.sendWelcomeEmail;
+                delete dataToSave.sendInvoiceEmail;
+                delete dataToSave.invoiceEmailTrigger;
+                delete dataToSave.invoicePatternStartDate; // New field to delete for staff type
+                delete dataToSave.sendInvoiceReminderEmail;
+                delete dataToSave.invoiceReminderDaysOffset;
+                delete dataToSave.sendReviewRequestEmail;
+                delete dataToSave.reviewRequestDaysOffset;
+                delete dataToSave.sendAppointmentReminderEmail;
+                delete dataToSave.appointmentReminderDaysOffset;
+                delete dataToSave.sendQuoteEmail;
 
                 if (initialData) {
                     response = await api.put(`/staff/${initialData._id}`, dataToSave);
@@ -327,6 +398,18 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                     amount: parseFloat(addr.amount) || 0
                 })).filter(addr => Object.values(addr).some(val => val && val.toString().trim() !== ''));
 
+                // IMPORTANT: Ensure invoicePatternStartDate is parsed as a Date or null if empty
+                if (dataToSave.sendInvoiceEmail && patternedInvoiceTriggers.includes(dataToSave.invoiceEmailTrigger)) { // Only process if enabled and a patterned trigger
+                    dataToSave.invoicePatternStartDate = formData.invoicePatternStartDate ? new Date(formData.invoicePatternStartDate) : null;
+                    if (!dataToSave.invoicePatternStartDate) { // Client-side validation: must have date for pattern
+                        setError('For patterned invoicing, a start date is required.');
+                        setSaving(false);
+                        return;
+                    }
+                } else {
+                    dataToSave.invoicePatternStartDate = null; // Clear if not a patterned trigger
+                }
+
                 if (initialData?._id && !initialData?.convertedFromLead) {
                     response = await api.put(`/customers/${initialData._id}`, dataToSave);
                     setSuccessMessage('Customer updated successfully!');
@@ -346,6 +429,18 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                 delete dataToSave.jobFixedAmount;
                 delete dataToSave.jobPercentage;
                 delete dataToSave.dailyClockInThresholdMins;
+                // Delete customer email preference fields if they somehow sneaked in
+                delete dataToSave.sendWelcomeEmail;
+                delete dataToSave.sendInvoiceEmail;
+                delete dataToSave.invoiceEmailTrigger;
+                delete dataToSave.invoicePatternStartDate; // New field to delete for lead type
+                delete dataToSave.sendInvoiceReminderEmail;
+                delete dataToSave.invoiceReminderDaysOffset;
+                delete dataToSave.sendReviewRequestEmail;
+                delete dataToSave.reviewRequestDaysOffset;
+                delete dataToSave.sendAppointmentReminderEmail;
+                delete dataToSave.appointmentReminderDaysOffset;
+                delete dataToSave.sendQuoteEmail;
 
                 if (initialData) {
                     response = await api.put(`/leads/${initialData._id}`, dataToSave);
@@ -367,8 +462,7 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
             setSaving(false);
         }
     };
-
-    return (
+return (
         <Modal isOpen={isOpen} onClose={onClose} title={modalTitle} maxWidthClass="max-w-4xl">
             <div className="py-4 px-2 custom-scrollbar max-h-[80vh] overflow-y-auto">
                 <form onSubmit={handleSubmit} className="p-2 space-y-6">
@@ -605,7 +699,7 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
 
 
                                 {formData.serviceAddresses.map((serviceAddress, index) => (
-                                    <div key={index} className="relative p-3 border border-gray-200 rounded-lg bg-white shadow-sm space-y-3">
+                                    <div key={index} className="relative p-3 border border-gray-200 rounded-lg bg-white shadow-sm grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <AddressInput
                                             label={`Service Address ${index + 1}`}
                                             address={serviceAddress}
@@ -674,7 +768,7 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                                 value={formData.employeeId}
                                 onChange={handleChange}
                             />
-                            {/* --- NEW PAYROLL FIELDS FOR STAFF --- */}
+                            {/* Payroll fields for Staff (already existing) */}
                             <h3 className="text-lg font-bold text-gray-900 col-span-full mt-6 mb-2">Payroll Settings</h3>
                             
                             <ModernSelect
@@ -738,9 +832,159 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                                     placeholder="e.g., 480 for 8 hours"
                                 />
                             )}
-                            {/* --- END NEW PAYROLL FIELDS --- */}
                         </>
                     )}
+
+                    {/* --- NEW CUSTOMER EMAIL AUTOMATION SETTINGS --- */}
+                    {type === 'customer' && (
+                        <div className="col-span-full space-y-4 p-4 border border-blue-200 rounded-lg bg-blue-50">
+                            <h3 className="text-lg font-bold text-blue-800 mb-3">Automated Email Preferences</h3>
+
+                            {/* Send Welcome Email */}
+                            <div className="flex items-center justify-between">
+                                <label className="text-gray-700 font-medium">Send Welcome Email:</label>
+                                <input
+                                    type="checkbox"
+                                    name="sendWelcomeEmail"
+                                    checked={formData.sendWelcomeEmail}
+                                    onChange={handleChange}
+                                    className="form-checkbox h-5 w-5 text-blue-600"
+                                />
+                            </div>
+
+                            {/* Send Invoice Email */}
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-gray-700 font-medium">Send Invoice Email:</label>
+                                    <input
+                                        type="checkbox"
+                                        name="sendInvoiceEmail"
+                                        checked={formData.sendInvoiceEmail}
+                                        onChange={handleChange}
+                                        className="form-checkbox h-5 w-5 text-blue-600"
+                                    />
+                                </div>
+                                {formData.sendInvoiceEmail && (
+                                    <>
+                                    <ModernSelect
+                                        label="Invoice Email Trigger"
+                                        name="invoiceEmailTrigger"
+                                        value={formData.invoiceEmailTrigger}
+                                        onChange={handleChange}
+                                        options={invoiceEmailTriggerOptions}
+                                        required
+                                        className="ml-6"
+                                    />
+                                    {patternedInvoiceTriggers.includes(formData.invoiceEmailTrigger) && ( // Show date picker if pattern is selected
+                                        <ModernInput
+                                            label="First Invoice Date (for pattern)"
+                                            name="invoicePatternStartDate"
+                                            type="date"
+                                            value={formData.invoicePatternStartDate}
+                                            onChange={handleChange}
+                                            required
+                                            className="ml-6"
+                                        />
+                                    )}
+                                    </>
+                                )}
+                            </div>
+
+                            {/* Send Invoice Reminder Email */}
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-gray-700 font-medium">Send Invoice Reminder Email:</label>
+                                    <input
+                                        type="checkbox"
+                                        name="sendInvoiceReminderEmail"
+                                        checked={formData.sendInvoiceReminderEmail}
+                                        onChange={handleChange}
+                                        className="form-checkbox h-5 w-5 text-blue-600"
+                                    />
+                                </div>
+                                {formData.sendInvoiceReminderEmail && (
+                                    <ModernInput
+                                        label="Reminder Days After Due Date"
+                                        name="invoiceReminderDaysOffset"
+                                        type="number"
+                                        value={formData.invoiceReminderDaysOffset}
+                                        onChange={handleChange}
+                                        min="0"
+                                        required
+                                        placeholder="e.g., 7 days"
+                                        className="ml-6"
+                                    />
+                                )}
+                            </div>
+
+                            {/* Send Review Request Email */}
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-gray-700 font-medium">Send Review Request Email:</label>
+                                    <input
+                                        type="checkbox"
+                                        name="sendReviewRequestEmail"
+                                        checked={formData.sendReviewRequestEmail}
+                                        onChange={handleChange}
+                                        className="form-checkbox h-5 w-5 text-blue-600"
+                                    />
+                                </div>
+                                {formData.sendReviewRequestEmail && (
+                                    <ModernInput
+                                        label="Review Days After Completion"
+                                        name="reviewRequestDaysOffset"
+                                        type="number"
+                                        value={formData.reviewRequestDaysOffset}
+                                        onChange={handleChange}
+                                        min="0"
+                                        required
+                                        placeholder="e.g., 3 days"
+                                        className="ml-6"
+                                    />
+                                )}
+                            </div>
+
+                            {/* Send Appointment Reminder Email */}
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-gray-700 font-medium">Send Appointment Reminder Email:</label>
+                                    <input
+                                        type="checkbox"
+                                        name="sendAppointmentReminderEmail"
+                                        checked={formData.sendAppointmentReminderEmail}
+                                        onChange={handleChange}
+                                        className="form-checkbox h-5 w-5 text-blue-600"
+                                    />
+                                </div>
+                                {formData.sendAppointmentReminderEmail && (
+                                    <ModernInput
+                                        label="Reminder Days Before Appointment"
+                                        name="appointmentReminderDaysOffset"
+                                        type="number"
+                                        value={formData.appointmentReminderDaysOffset}
+                                        onChange={handleChange}
+                                        min="0"
+                                        required
+                                        placeholder="e.g., 1 day"
+                                        className="ml-6"
+                                    />
+                                )}
+                            </div>
+
+                            {/* Send Quote Email */}
+                            <div className="flex items-center justify-between">
+                                <label className="text-gray-700 font-medium">Send Quote Email:</label>
+                                <input
+                                    type="checkbox"
+                                    name="sendQuoteEmail"
+                                    checked={formData.sendQuoteEmail}
+                                    onChange={handleChange}
+                                    className="form-checkbox h-5 w-5 text-blue-600"
+                                />
+                            </div>
+                        </div>
+                    )}
+                    {/* --- END NEW CUSTOMER EMAIL AUTOMATION SETTINGS --- */}
 
                     <div className="flex justify-end space-x-2 mt-6">
                         <button type="button" onClick={onClose} className="px-6 py-3 mr-3 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors duration-200 text-lg font-medium shadow-sm" disabled={saving}>

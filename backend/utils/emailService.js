@@ -1,42 +1,44 @@
+// backend/utils/emailService.js
+
 const nodemailer = require('nodemailer');
 
 // Create a transporter using Ethereal's SMTP details
-// It's best practice to use environment variables for sensitive info,
-// but for immediate testing, you can hardcode them here temporarily if you prefer,
-// just remember to move them back to .env for production.
 const transporter = nodemailer.createTransport({
-    host: 'smtp.ethereal.email', // Ethereal Host (remains the same)
-    port: 587,                   // Ethereal Port (remains the same)
-    secure: false,               // false for STARTTLS (port 587) (remains the same)
+    host: 'smtp.ethereal.email',
+    port: 587,
+    secure: false, // false for STARTTLS (port 587)
     auth: {
-        // THIS MUST BE THE EMAIL YOU ARE LOGGED INTO ON ETHEREAL TO VIEW EMAILS
-        user: 'mike31@ethereal.email', // <--- UPDATED to mike31@ethereal.email
-        pass: 'dSVbFPh5XetvBDsnHg'     // <--- UPDATED to the new password
+        // --- UPDATED CREDENTIALS ---
+        user: 'torrance.eichmann@ethereal.email',
+        pass: 'J6J2xTbmZ3UhFTqrZT'
+        // --- END UPDATED CREDENTIALS ---
     },
     tls: {
-        rejectUnauthorized: false // Needed for Ethereal over STARTTLS (remains the same)
+        rejectUnauthorized: false // Needed for Ethereal over STARTTLS
     }
 });
 
-const sendEmail = async (to, subject, text, html) => {
+// Modified to accept an 'attachments' parameter
+const sendEmail = async (to, subject, text, html, attachments = []) => {
     const mailOptions = {
-        // IMPORTANT: The 'from' address MUST match the 'user' in the 'auth' block above for Ethereal to send correctly.
-        from: 'ServiceOS <mike31@ethereal.email>', // <--- UPDATED to mike31@ethereal.email
-        to, // list of receivers (this should be the actual staff member's email)
-        subject, // Subject line
-        text, // plain text body
-        html, // html body
+        // The 'from' address MUST match the 'user' in the 'auth' block above
+        from: '"ServiceOS" <torrance.eichmann@ethereal.email>', // --- UPDATED 'FROM' ADDRESS ---
+        to,
+        subject,
+        text,
+        html,
+        attachments, // Include attachments in the mail options
     };
 
     try {
         const info = await transporter.sendMail(mailOptions);
         console.log('Message sent: %s', info.messageId);
-        // Preview URL is only available when sending through an Ethereal account
+        // Preview URL is available when sending through an Ethereal account
         console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
-        return info; // Return info for logging or further processing
+        return info;
     } catch (error) {
         console.error('Error sending email:', error);
-        throw error; // Re-throw the error so it can be caught by the calling function (e.g., authController)
+        throw error;
     }
 };
 

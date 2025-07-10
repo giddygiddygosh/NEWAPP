@@ -1,59 +1,61 @@
+// src/components/stock/StockView.js
+
 import React, { useState, useEffect, useMemo } from 'react';
 import StockFormModal from './StockFormModal';
-import { Package, Plus, Edit, Trash2, Loader, TrendingUp, TrendingDown, Info } from 'lucide-react'; // Removed DollarSign import
+import StockInvoiceModal from './StockInvoiceModal'; // Import the new modal
+import { Package, Plus, Edit, Trash2, Loader, TrendingUp, Info, FileText } from 'lucide-react';
 import api from '../../utils/api';
-import { useCurrency } from '../context/CurrencyContext'; // Import useCurrency hook
+import { useCurrency } from '../context/CurrencyContext';
+import { toast } from 'react-toastify';
 
 const StockView = () => {
-    // Destructure formatCurrency and currency object from useCurrency
-    const { formatCurrency, currency, loading: currencyLoading } = useCurrency(); 
+    const { formatCurrency, currency, loading: currencyLoading } = useCurrency();
     
     const [stock, setStock] = useState([]);
-    const [loadingStock, setLoadingStock] = useState(true);
+    const [customers, setCustomers] = useState([]); // State for customers
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+    const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false); // State for the new modal
     const [editingItem, setEditingItem] = useState(null);
 
-    // No need for currentCurrencySymbol or currencySymbolToDisplay derived this way.
-    // formatCurrency handles the symbol.
-
-    // Removed CurrencyIconComponent as we will no longer display a static icon next to the formatted value.
-    // If you want dynamic icons (e.g., a specific icon for EUR, another for GBP),
-    // you would need a custom helper function that maps currency codes/symbols to Lucide React icons.
-
-    useEffect(() => {
-        fetchStockItems();
-    }, []);
-
-    const fetchStockItems = async () => {
-        setLoadingStock(true);
+    const fetchData = async () => {
+        setLoading(true);
         setError(null);
         try {
-            const res = await api.get('/stock');
-            setStock(res.data);
+            // Fetch both stock and customers at the same time
+            const [stockRes, customersRes] = await Promise.all([
+                api.get('/stock'),
+                api.get('/customers')
+            ]);
+            setStock(stockRes.data);
+            setCustomers(customersRes.data);
         } catch (err) {
-            console.error('Error fetching stock items:', err);
-            setError(err.response?.data?.message || 'Failed to fetch stock items.');
+            console.error('Error fetching data:', err);
+            setError(err.response?.data?.message || 'Failed to fetch data.');
         } finally {
-            setLoadingStock(false);
+            setLoading(false);
         }
     };
 
+    useEffect(() => {
+        fetchData();
+    }, []);
+
     const handleSaveStock = async (itemData) => {
-        setLoadingStock(true);
-        setError(null);
         try {
             if (itemData._id) {
                 await api.put(`/stock/${itemData._id}`, itemData);
+                toast.success("Stock item updated successfully!");
             } else {
                 await api.post('/stock', itemData);
+                toast.success("Stock item added successfully!");
             }
-            fetchStockItems(); // Re-fetch to update the list
+            fetchData(); // Re-fetch all data to update the view
         } catch (err) {
-            console.error('Error saving stock item:', err);
-            setError(err.response?.data?.message || 'Failed to save stock item.');
-        } finally {
-            // Loading will be set to false by fetchStockItems() on success/failure
+            const errorMessage = err.response?.data?.message || 'Failed to save stock item.';
+            setError(errorMessage);
+            toast.error(errorMessage);
         }
     };
 
@@ -61,69 +63,39 @@ const StockView = () => {
         if (!window.confirm('Are you sure you want to delete this stock item? This action cannot be undone.')) {
             return;
         }
-        setLoadingStock(true);
-        setError(null);
         try {
             await api.delete(`/stock/${itemId}`);
-            fetchStockItems(); // Re-fetch to update the list
+            toast.success("Stock item deleted.");
+            fetchData();
         } catch (err) {
-            console.error('Error deleting stock item:', err);
-            setError(err.response?.data?.message || 'Failed to delete stock item.');
-        } finally {
-            // Loading will be set to false by fetchStockItems() on success/failure
+            const errorMessage = err.response?.data?.message || 'Failed to delete stock item.';
+            setError(errorMessage);
+            toast.error(errorMessage);
         }
     };
 
-    const handleOpenModal = (item = null) => {
+    const handleOpenFormModal = (item = null) => {
         setEditingItem(item);
-        setIsModalOpen(true);
+        setIsFormModalOpen(true);
     };
 
     const inventoryMetrics = useMemo(() => {
-        if (!stock || stock.length === 0) {
-            return {
-                totalInventoryValue: 0,
-                totalPotentialSalesValue: 0,
-                potentialProfitOnHand: 0,
-                lowStockItemsCount: 0,
-            };
-        }
-
-        let totalInventoryValue = 0;
-        let totalPotentialSalesValue = 0;
-        let lowStockItemsCount = 0;
-
+        if (!stock || stock.length === 0) return { totalInventoryValue: 0, totalPotentialSalesValue: 0, potentialProfitOnHand: 0, lowStockItemsCount: 0 };
+        let totalInventoryValue = 0, totalPotentialSalesValue = 0, lowStockItemsCount = 0;
         stock.forEach(item => {
             const quantity = parseFloat(item.stockQuantity) || 0;
             const purchase = parseFloat(item.purchasePrice) || 0;
             const sale = parseFloat(item.salePrice) || 0;
             const reorder = parseFloat(item.reorderLevel) || 0;
-
             totalInventoryValue += (quantity * purchase);
             totalPotentialSalesValue += (quantity * sale);
-
-            if (quantity <= reorder) {
-                lowStockItemsCount++;
-            }
+            if (quantity <= reorder) lowStockItemsCount++;
         });
+        return { totalInventoryValue, totalPotentialSalesValue, potentialProfitOnHand: totalPotentialSalesValue - totalInventoryValue, lowStockItemsCount };
+    }, [stock]);
 
-        const potentialProfitOnHand = totalPotentialSalesValue - totalInventoryValue;
-
-        return {
-            totalInventoryValue,
-            totalPotentialSalesValue,
-            potentialProfitOnHand,
-            lowStockItemsCount,
-        };
-    }, [stock]); // Dependency on stock items
-
-    // Combine loading states for initial render
-    if (loadingStock || currencyLoading) { 
+    if (loading || currencyLoading) {
         return <Loader />;
-    }
-
-    if (error) {
-        return <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>;
     }
 
     return (
@@ -133,73 +105,50 @@ const StockView = () => {
                     <Package className="w-10 h-10 text-blue-600" />
                     <h1 className="text-4xl font-extrabold text-gray-900">Stock Inventory</h1>
                 </div>
-                <button
-                    onClick={() => handleOpenModal()}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700"
-                    disabled={loadingStock}
-                >
-                    <Plus size={20} /> Add Stock Item
-                </button>
+                <div className="flex gap-4">
+                    <button
+                        onClick={() => setIsInvoiceModalOpen(true)}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700"
+                    >
+                        <FileText size={20} /> Create Stock Invoice
+                    </button>
+                    <button
+                        onClick={() => handleOpenFormModal()}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700"
+                    >
+                        <Plus size={20} /> Add Stock Item
+                    </button>
+                </div>
             </header>
 
-            {/* Error display outside header */}
             {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>}
 
-            {/* Summary Metrics Section */}
+            {/* --- JSX RESTORED --- */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                {/* Total Inventory Value */}
-                <div className="bg-white rounded-xl shadow-lg p-4 flex items-center justify-between">
-                    <div>
-                        <h3 className="text-lg font-semibold text-gray-700 mb-1">Total Inventory Value</h3>
-                        <p className="text-3xl font-bold text-red-600 flex items-center">
-                            {/* Removed CurrencyIconComponent here */}
-                            {formatCurrency(inventoryMetrics.totalInventoryValue)} {/* Use formatCurrency */}
-                        </p>
-                    </div>
+                <div className="bg-gray-50 rounded-xl shadow-md p-4">
+                    <h3 className="text-md font-semibold text-gray-600 mb-1">Total Inventory Value</h3>
+                    <p className="text-3xl font-bold text-red-600">{formatCurrency(inventoryMetrics.totalInventoryValue)}</p>
                 </div>
-
-                {/* Total Potential Sales Value */}
-                <div className="bg-white rounded-xl shadow-lg p-4 flex items-center justify-between">
-                    <div>
-                        <h3 className="text-lg font-semibold text-gray-700 mb-1">Total Sales Value</h3>
-                        <p className="text-3xl font-bold text-green-600 flex items-center">
-                            {/* Removed CurrencyIconComponent here */}
-                            {formatCurrency(inventoryMetrics.totalPotentialSalesValue)} {/* Use formatCurrency */}
-                        </p>
-                    </div>
+                <div className="bg-gray-50 rounded-xl shadow-md p-4">
+                    <h3 className="text-md font-semibold text-gray-600 mb-1">Total Sales Value</h3>
+                    <p className="text-3xl font-bold text-green-600">{formatCurrency(inventoryMetrics.totalPotentialSalesValue)}</p>
                 </div>
-
-                {/* Potential Profit on Hand */}
-                <div className="bg-white rounded-xl shadow-lg p-4 flex items-center justify-between">
-                    <div>
-                        <h3 className="text-lg font-semibold text-gray-700 mb-1">Potential Profit</h3>
-                        <p className="text-3xl font-bold text-blue-600 flex items-center">
-                            {/* Removed CurrencyIconComponent here */}
-                            {formatCurrency(inventoryMetrics.potentialProfitOnHand)} {/* Use formatCurrency */}
-                        </p>
-                    </div>
-                    <TrendingUp size={36} className="text-blue-400" />
+                <div className="bg-gray-50 rounded-xl shadow-md p-4">
+                    <h3 className="text-md font-semibold text-gray-600 mb-1">Potential Profit</h3>
+                    <p className="text-3xl font-bold text-blue-600">{formatCurrency(inventoryMetrics.potentialProfitOnHand)}</p>
                 </div>
-
-                {/* Low Stock Items Count */}
-                <div className="bg-white rounded-xl shadow-lg p-4 flex items-center justify-between">
-                    <div>
-                        <h3 className="text-lg font-semibold text-gray-700 mb-1">Low Stock Items</h3>
-                        <p className="text-3xl font-bold text-orange-600">
-                            {inventoryMetrics.lowStockItemsCount}
-                        </p>
-                    </div>
-                    <Info size={36} className="text-orange-400" />
+                <div className="bg-gray-50 rounded-xl shadow-md p-4">
+                    <h3 className="text-md font-semibold text-gray-600 mb-1">Low Stock Items</h3>
+                    <p className="text-3xl font-bold text-orange-600">{inventoryMetrics.lowStockItemsCount}</p>
                 </div>
             </div>
 
-            {/* Stock Table */}
             <div className="bg-white rounded-xl shadow-lg p-4">
-                {loadingStock ? (
+                {loading ? (
                     <Loader />
                 ) : stock.length === 0 ? (
                     <div className="p-8 text-center text-gray-600">
-                        No stock items found. Click '<Plus size={16} className="inline-block relative -top-0.5" /> Add Stock Item' to get started!
+                        No stock items found. Click 'Add Stock Item' to get started!
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -208,24 +157,20 @@ const StockView = () => {
                                 <tr className="border-b-2 border-gray-300 text-left text-sm text-gray-700 uppercase bg-gray-50">
                                     <th className="py-3 px-4">Name</th>
                                     <th className="py-3 px-4">Quantity</th>
-                                    <th className="py-3 px-4">Sale Price Per Unit</th>
+                                    <th className="py-3 px-4">Sale Price</th>
                                     <th className="py-3 px-4">Re-order Level</th>
                                     <th className="py-3 px-4"></th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {(stock || []).map(item => (
+                                {stock.map(item => (
                                     <tr key={item._id} className={`border-b border-gray-100 hover:bg-gray-50 ${item.stockQuantity <= item.reorderLevel ? 'bg-red-50' : ''}`}>
                                         <td className="py-3 px-4 font-semibold text-gray-800">{item.name}</td>
                                         <td className="py-3 px-4 text-gray-700">{item.stockQuantity} {item.unit}</td>
-                                        <td className="py-3 px-4 text-gray-700">
-                                            {formatCurrency(parseFloat(item.salePrice || item.purchasePrice || 0))} {/* Use formatCurrency */}
-                                        </td>
-                                        <td className={`py-3 px-4 font-medium ${item.stockQuantity <= item.reorderLevel ? 'text-red-600' : 'text-gray-700'}`}>
-                                            {item.reorderLevel}
-                                        </td>
+                                        <td className="py-3 px-4 text-gray-700">{formatCurrency(item.salePrice)}</td>
+                                        <td className={`py-3 px-4 font-medium ${item.stockQuantity <= item.reorderLevel ? 'text-red-600' : 'text-gray-700'}`}>{item.reorderLevel}</td>
                                         <td className="text-right py-3 px-4">
-                                            <button onClick={() => handleOpenModal(item)} className="p-2 text-gray-500 hover:text-blue-600 rounded-full"><Edit size={18}/></button>
+                                            <button onClick={() => handleOpenFormModal(item)} className="p-2 text-gray-500 hover:text-blue-600 rounded-full"><Edit size={18}/></button>
                                             <button onClick={() => handleDeleteStock(item._id)} className="p-2 text-gray-500 hover:text-red-600 rounded-full"><Trash2 size={18}/></button>
                                         </td>
                                     </tr>
@@ -235,20 +180,23 @@ const StockView = () => {
                     </div>
                 )}
             </div>
+            {/* --- END OF RESTORED JSX --- */}
 
             <StockFormModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                isOpen={isFormModalOpen}
+                onClose={() => setIsFormModalOpen(false)}
                 onSave={handleSaveStock}
                 item={editingItem}
-                // Pass the full currency object to the modal if it needs detailed currency info
-                // Otherwise, the modal can also use `useCurrency()` directly.
-                // If it needs the symbol for input prefixes, pass `currency.symbol`.
-                // For now, let's assume it uses `useCurrency` directly or just needs the symbol.
-                // currency={currency?.code} // Pass the currency CODE, e.g., "GBP"
+            />
+            <StockInvoiceModal
+                isOpen={isInvoiceModalOpen}
+                onClose={() => setIsInvoiceModalOpen(false)}
+                stockItems={stock}
+                customers={customers}
             />
         </div>
     );
 };
 
 export default StockView;
+

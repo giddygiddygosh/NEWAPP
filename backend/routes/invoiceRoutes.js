@@ -1,29 +1,24 @@
-// backend/routes/invoiceRoutes.js
-
 const express = require('express');
 const router = express.Router();
+const { protect, adminManager } = require('../middleware/authMiddleware');
 
-const {
-    createInvoiceFromJob,
-    getInvoices,
-    getInvoiceById,
-    updateInvoiceStatus, // NEW: Import the updateInvoiceStatus function
-} = require('../controllers/invoiceController');
+// Import the entire controller as a single object.
+const invoiceController = require('../controllers/invoiceController');
 
-// --- CORRECTED FILE PATH ---
-const { protect, authorize } = require('../middleware/authMiddleware');
-
-// Route for /api/invoices (for listing all and creating new)
+// GET all invoices
 router.route('/')
-    .post(protect, authorize('admin', 'manager'), createInvoiceFromJob)
-    .get(protect, authorize('admin', 'manager'), getInvoices);
+  .get(protect, invoiceController.getInvoices);
 
-// Route for /api/invoices/:id (for getting a single invoice)
+// POST a new invoice from stock
+router.route('/stock')
+  .post(protect, adminManager, invoiceController.createStockInvoice);
+
+// Routes for a specific invoice by ID
 router.route('/:id')
-    .get(protect, authorize('admin', 'manager'), getInvoiceById);
+  .get(protect, invoiceController.getInvoiceById);
 
-// NEW: Route for updating the status of a specific invoice
-router.route('/:id/status') // Specific endpoint for status updates
-    .put(protect, authorize('admin', 'manager'), updateInvoiceStatus); // Use the new controller function
+// Route to update the status of a specific invoice
+router.route('/:id/status')
+  .put(protect, adminManager, invoiceController.updateInvoiceStatus);
 
 module.exports = router;

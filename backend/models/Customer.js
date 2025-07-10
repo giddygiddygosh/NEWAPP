@@ -1,5 +1,3 @@
-// backend/models/Customer.js
-
 const mongoose = require('mongoose');
 
 const AddressSchema = new mongoose.Schema({
@@ -8,17 +6,34 @@ const AddressSchema = new mongoose.Schema({
     county: { type: String, trim: true, default: '' },
     postcode: { type: String, trim: true, default: '' },
     country: { type: String, trim: true, default: '' },
-    name: { type: String, trim: true, default: '' }, // This 'name' field seems a bit redundant in an AddressSchema, but keeping as per your draft.
-    payType: { // This seems like a customer-level field, unusual in AddressSchema, but keeping as per your draft.
+    name: { type: String, trim: true, default: '' },
+    payType: {
         type: String,
         enum: ['Fixed', 'Hourly', ''],
         default: '',
     },
-    amount: { // This seems like a customer-level field, unusual in AddressSchema, but keeping as per your draft.
+    amount: {
         type: Number,
         default: 0,
     },
 }, { _id: false });
+
+const EmailPreferenceSchema = new mongoose.Schema({
+    type: {
+        type: String,
+        required: true,
+        unique: false,
+    },
+    enabled: {
+        type: Boolean,
+        default: true,
+    },
+    daysOffset: {
+        type: Number,
+        default: 0,
+    },
+}, { _id: false });
+
 
 const customerSchema = new mongoose.Schema({
     company: {
@@ -101,6 +116,66 @@ const customerSchema = new mongoose.Schema({
         trim: true,
         default: ''
     },
+    emailPreferences: { // Already exists, but for clarity on specific preferences
+        type: [EmailPreferenceSchema],
+        default: [],
+    },
+    // --- NEW FIELDS FOR AUTOMATED EMAIL SETTINGS ---
+    // Welcome Email
+    sendWelcomeEmail: {
+        type: Boolean,
+        default: true,
+    },
+    // Invoice Email
+    sendInvoiceEmail: {
+        type: Boolean,
+        default: true,
+    },
+    invoiceEmailTrigger: { // e.g., 'On Completion', 'Weekly', 'Bi-Weekly', 'Monthly'
+        type: String,
+        enum: ['On Completion', 'Weekly', 'Bi-Weekly', '4-Weekly', 'Monthly', ''],
+        default: 'On Completion',
+    },
+    invoicePatternStartDate: { // <--- ADD THIS FIELD FOR PATTERNED INVOICING
+        type: Date,
+        default: null, // It should be null if not a patterned trigger
+    },
+    // Invoice Reminder
+    sendInvoiceReminderEmail: {
+        type: Boolean,
+        default: false,
+    },
+    invoiceReminderDaysOffset: { // Days after due date
+        type: Number,
+        default: 7, // Default to 7 days after
+        min: 0,
+    },
+    // Review Request
+    sendReviewRequestEmail: {
+        type: Boolean,
+        default: false,
+    },
+    reviewRequestDaysOffset: { // Days after job completion
+        type: Number,
+        default: 3, // Default to 3 days after
+        min: 0,
+    },
+    // Appointment Reminder
+    sendAppointmentReminderEmail: {
+        type: Boolean,
+        default: true,
+    },
+    appointmentReminderDaysOffset: { // Days *before* appointment
+        type: Number,
+        default: 1, // Default to 1 day before
+        min: 0,
+    },
+    // Quote Email
+    sendQuoteEmail: {
+        type: Boolean,
+        default: true,
+    },
+    // --- END NEW FIELDS ---
     createdAt: {
         type: Date,
         default: Date.now,

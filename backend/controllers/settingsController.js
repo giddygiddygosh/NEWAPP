@@ -1,65 +1,57 @@
-const asyncHandler = require('express-async-handler');
+// backend/controllers/settingsController.js
+
 const CompanySetting = require('../models/CompanySetting');
-const Company = require('../models/Company'); // Ensure this import is correct
+const Company = require('../models/Company'); // Assuming you have a Company model for company.name, address, etc.
 
 /**
- * @desc Get company settings for the authenticated company
- * @route GET /api/settings
- * @access Private (Admin, Manager, Staff)
+ * @desc    Get company settings
+ * @route   GET /api/settings
+ * @access  Private (admin, manager, staff)
  */
-const getCompanySettings = asyncHandler(async (req, res) => {
-    const companyId = req.user.company;
+exports.getCompanySettings = async (req, res) => {
+    try {
+        // Assuming req.user.company._id is available from your authentication middleware
+        const companyId = req.user.company._id; 
 
-    // FIX: Add 'settings.taxId' and other nested 'settings' fields to the populate fields for 'company'
-    const settings = await CompanySetting.findOne({ company: companyId })
-                                         .populate('company', 'name appId settings.taxId settings.address settings.phone settings.email settings.website settings.currency settings.invoiceSettings'); 
-                                         // Included other common nested fields for a complete picture.
-                                         // Adjust this string to include only the 'company' sub-fields you actually need in the response.
+        const settings = await CompanySetting.findOne({ company: companyId })
+            .populate('company'); // Populate the company details if needed
 
-    if (!settings) {
-        res.status(404);
-        throw new Error('Company settings not found.');
+        if (!settings) {
+            // If no settings exist for the company, return a default or 404
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Company settings not found. Please create them first.' 
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            settings: settings
+        });
+
+    } catch (error) {
+        console.error('Error in getCompanySettings:', error);
+        res.status(500).json({ success: false, message: error.message || 'Failed to fetch company settings.' });
     }
-
-    res.status(200).json(settings);
-});
+};
 
 /**
- * @desc Update company settings for the authenticated company
- * @route PUT /api/settings
- * @access Private (Admin, Manager)
+ * @desc    Update company settings
+ * @route   PUT /api/settings
+ * @access  Private (admin, manager)
  */
-const updateCompanySettings = asyncHandler(async (req, res) => {
-    const companyId = req.user.company;
-    const {
-        companyLogoUrl,
-        defaultFormName,
-        backgroundColor,
-        primaryColor,
-        borderColor,
-        labelColor,
-        inputButtonBorderRadius,
-        defaultCurrency, // This is for CompanySetting model
-        emailAutomation,
-        invoiceSettings, // This is for CompanySetting model
+exports.updateCompanySettings = async (req, res) => {
+    // --- START DEBUG LOGGING ---
+    console.log('--- BACKEND RECEIVED REQ.BODY (Company Settings) ---');
+    console.log('Original req.body:', req.body); // Log full body for inspection
+    console.log('Company Name (from req.body):', req.body.name); // Specific check for company name
+    console.log('Global Invoice Email Enabled (from req.body):', req.body.emailAutomation?.invoice_email?.enabled); // Specific check for global email setting
+    console.log('--- END BACKEND REQ.BODY ---');
+    // --- END DEBUG LOGGING ---
 
-        // These fields are for the Company model, but they are NESTED under 'settings'
-        name, // This is a root field on the Company model
-        address, // This is for Company.settings.address (an object)
-        phone, // This is for Company.settings.phone
-        email, // This is for Company.settings.email
-        website, // This is for Company.settings.website
-        taxId // This is for Company.settings.taxId
-    } = req.body;
-
-    // console.log('Received taxId in payload:', taxId); // Uncomment for debugging if needed
-
-    let settings = await CompanySetting.findOne({ company: companyId });
-
-    if (!settings) {
-        // If no settings exist, create a new one
-        settings = await CompanySetting.create({
-            company: companyId,
+    try {
+        const {
+            // CompanySetting fields (direct properties)
             companyLogoUrl,
             defaultFormName,
             backgroundColor,
@@ -67,101 +59,110 @@ const updateCompanySettings = asyncHandler(async (req, res) => {
             borderColor,
             labelColor,
             inputButtonBorderRadius,
-            // Ensure defaultCurrency and invoiceSettings are initialized or spread from req.body
-            defaultCurrency: defaultCurrency || {},
-            emailAutomation: emailAutomation || {},
-            invoiceSettings: invoiceSettings || {},
-        });
-    }
+            
+            // Nested CompanySetting sub-documents
+            defaultCurrency,
+            invoiceSettings,
+            emailAutomation, // This is correctly destructured
 
-    // Update fields belonging to the CompanySetting model
-    settings.companyLogoUrl = companyLogoUrl ?? settings.companyLogoUrl;
-    settings.defaultFormName = defaultFormName ?? settings.defaultFormName;
-    settings.backgroundColor = backgroundColor ?? settings.backgroundColor;
-    settings.primaryColor = primaryColor ?? settings.primaryColor;
-    settings.borderColor = borderColor ?? settings.borderColor;
-    settings.labelColor = labelColor ?? settings.labelColor;
-    settings.inputButtonBorderRadius = inputButtonBorderRadius ?? settings.inputButtonBorderRadius;
-    
-    // Handle nested defaultCurrency for CompanySetting
-    if (defaultCurrency) {
-        settings.defaultCurrency.code = defaultCurrency.code ?? settings.defaultCurrency.code;
-        settings.defaultCurrency.symbol = defaultCurrency.symbol ?? settings.defaultCurrency.symbol;
-        settings.defaultCurrency.decimalPlaces = defaultCurrency.decimalPlaces ?? settings.defaultCurrency.decimalPlaces;
-        settings.defaultCurrency.thousandSeparator = defaultCurrency.thousandSeparator ?? settings.defaultCurrency.thousandSeparator;
-        settings.defaultCurrency.decimalSeparator = defaultCurrency.decimalSeparator ?? settings.defaultCurrency.decimalSeparator;
-        settings.defaultCurrency.formatTemplate = defaultCurrency.formatTemplate ?? settings.defaultCurrency.formatTemplate;
-    }
+            // Fields that belong to the 'Company' model (passed as top-level fields from frontend)
+            name,    // This is 'companyName' from frontend
+            address, // This is 'companyAddress' from frontend
+            phone,   // This is 'companyPhone' from frontend
+            email,   // This is 'companyEmail' from frontend
+            website, // This is 'companyWebsite' from frontend
+            taxId    // This is 'companyTaxId' from frontend
+        } = req.body;
 
-    // Handle nested emailAutomation for CompanySetting
-    if (emailAutomation) {
-        for (const key in emailAutomation) {
-            if (settings.emailAutomation.hasOwnProperty(key)) {
-                if (typeof emailAutomation[key] === 'object' && emailAutomation[key] !== null) {
-                    for (const subKey in emailAutomation[key]) {
-                        if (settings.emailAutomation[key].hasOwnProperty(subKey)) {
-                            settings.emailAutomation[key][subKey] = emailAutomation[key][subKey];
-                        }
-                    }
-                } else {
-                    settings.emailAutomation[key] = emailAutomation[key];
-                }
+        const companyId = req.user.company._id; // Get company from authenticated user
+
+        // 1. Update the Company model
+        // This targets fields directly on the Company model or its nested 'settings' subdocument
+        const updatedCompanyDoc = await Company.findByIdAndUpdate(companyId, {
+            name: name, // Update the company's name directly
+            'settings.address': address, // Dot notation for nested fields on Company model
+            'settings.phone': phone,
+            'settings.email': email,
+            'settings.website': website,
+            'settings.taxId': taxId,
+        }, { new: true, runValidators: true, upsert: false }); // `new: true` returns updated doc, `upsert: false` means it must exist
+
+        if (!updatedCompanyDoc) {
+            // If company itself isn't found/updated, something is wrong.
+            return res.status(404).json({ success: false, message: 'Associated company not found or could not be updated.' });
+        }
+
+        // 2. Update the CompanySetting model
+        // This targets the CompanySetting document itself.
+        const updatedCompanySetting = await CompanySetting.findOneAndUpdate(
+            { company: companyId }, // Find the CompanySetting document linked to this company
+            {
+                // Direct properties of CompanySetting
+                companyLogoUrl,
+                defaultFormName,
+                backgroundColor,
+                primaryColor,
+                borderColor,
+                labelColor,
+                inputButtonBorderRadius,
+
+                // Nested sub-documents of CompanySetting
+                defaultCurrency,
+                invoiceSettings,
+                emailAutomation, // Pass the full emailAutomation object from req.body
+            },
+            {
+                new: true,         // Return the updated document
+                upsert: true,      // Create the document if it doesn't exist
+                runValidators: true // Run schema validators on the update
             }
-        }
-    }
+        ).populate('company'); // Populate company to return full company details in response
 
-    // Handle nested invoiceSettings for CompanySetting
-    if (invoiceSettings) {
-        settings.invoiceSettings.invoicePrefix = invoiceSettings.invoicePrefix ?? settings.invoiceSettings.invoicePrefix;
-        settings.invoiceSettings.nextInvoiceSeqNumber = invoiceSettings.nextInvoiceSeqNumber ?? settings.invoiceSettings.nextInvoiceSeqNumber;
-        settings.invoiceSettings.defaultTaxRate = invoiceSettings.defaultTaxRate ?? settings.invoiceSettings.defaultTaxRate;
-    }
-
-    // Handle updates to the Company model directly
-    const companyDoc = await Company.findById(companyId);
-    if (companyDoc) {
-        companyDoc.name = name ?? companyDoc.name; // Top-level field, correct
-
-        // **CRITICAL FIX:** Update nested fields under `companyDoc.settings`
-        companyDoc.settings.phone = phone ?? companyDoc.settings.phone;
-        companyDoc.settings.email = email ?? companyDoc.settings.email;
-        companyDoc.settings.website = website ?? companyDoc.settings.website;
-        companyDoc.settings.taxId = taxId ?? companyDoc.settings.taxId;
-
-        // For the 'address' object, update its sub-fields
-        if (address) {
-            companyDoc.settings.address.street = address.street ?? companyDoc.settings.address.street;
-            companyDoc.settings.address.city = address.city ?? companyDoc.settings.address.city;
-            companyDoc.settings.address.county = address.county ?? companyDoc.settings.address.county;
-            companyDoc.settings.address.postcode = address.postcode ?? companyDoc.settings.address.postcode;
-            companyDoc.settings.address.country = address.country ?? companyDoc.settings.address.country;
+        if (!updatedCompanySetting) {
+            return res.status(404).json({ success: false, message: 'Company settings document not found or could not be updated.' });
         }
 
-        // IMPORTANT: If you are sending `currency` or `invoiceSettings` in the request body
-        // and these are intended to update the Company model's `settings.currency` or `settings.invoiceSettings`,
-        // you would need to add similar update logic here.
-        // Based on your original code, it seemed `defaultCurrency` and `invoiceSettings` were primarily for `CompanySetting` model.
-        // Make sure you don't have conflicting updates or duplicate data.
+        // --- START DEBUG LOGGING: What Mongoose returns after saving ---
+        console.log('--- BACKEND Mongoose CompanySetting after update ---');
+        console.log('Company Name (from DB object):', updatedCompanySetting.company?.name); // Now accessed from populated company
+        console.log('Global Invoice Email Enabled (from DB object):', updatedCompanySetting.emailAutomation?.invoice_email?.enabled);
+        console.log('Full saved CompanySetting object:', updatedCompanySetting); // Log full object
+        console.log('--- END BACKEND Mongoose CompanySetting ---');
+        // --- END DEBUG LOGGING ---
 
-        await companyDoc.save(); // Save the Company document changes
-    } else {
-        console.warn(`Company document with ID ${companyId} not found during settings update. This should not happen.`);
+
+        res.status(200).json({
+            success: true,
+            settings: updatedCompanySetting, // Send the full updated settings object back
+            message: 'Company settings updated successfully!'
+        });
+
+    } catch (error) {
+        console.error('--- BACKEND ERROR during Company Settings update ---');
+        console.error('Error object:', error);
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+        if (error.errors) { // Mongoose validation errors
+            console.error('Validation errors:', Object.values(error.errors).map(err => err.message));
+        }
+        console.error('--- END BACKEND ERROR ---');
+
+        if (error.name === 'ValidationError') {
+            const messages = Object.values(error.errors).map(val => val.message);
+            return res.status(400).json({ success: false, message: messages.join(', ') });
+        }
+        res.status(500).json({ success: false, message: error.message || 'Failed to update company settings.' });
     }
+};
 
-    const updatedSettings = await settings.save(); // Save the CompanySetting document changes
-
-    // FIX: Add 'settings.taxId' and other nested 'settings' fields to the populate fields for 'company' here as well
-    const finalSettings = await CompanySetting.findById(updatedSettings._id)
-                                              .populate('company', 'name appId settings.taxId settings.address settings.phone settings.email settings.website settings.currency settings.invoiceSettings');
-                                              // Ensure consistency with the getCompanySettings populate string.
-
-    res.status(200).json({
-        message: 'Company settings updated successfully.',
-        settings: finalSettings
-    });
-});
-
+// All other exports like getCustomers, createCustomer, updateCustomer, deleteCustomer, etc.
 module.exports = {
-    getCompanySettings,
-    updateCompanySettings,
+    createCustomer: exports.createCustomer, // Ensure all original exports are present
+    getCustomers: exports.getCustomers,
+    getCustomerById: exports.getCustomerById,
+    updateCustomer: exports.updateCustomer,
+    deleteCustomer: exports.deleteCustomer,
+    bulkUploadCustomers: exports.bulkUploadCustomers,
+    getCompanySettings: exports.getCompanySettings, // Ensure this is exported
+    updateCompanySettings: exports.updateCompanySettings, // Ensure this is exported
 };

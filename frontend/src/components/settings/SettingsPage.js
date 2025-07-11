@@ -51,7 +51,6 @@ const SettingsPage = () => {
         defaultTaxRate: 0,
 
         // Email Automation Settings in local state
-        // Initializing all to true as requested in previous turn for testing defaults
         emailAutomation: {
             welcome_email: { enabled: true },
             appointment_reminder: { enabled: true, daysBefore: 1 },
@@ -72,7 +71,7 @@ const SettingsPage = () => {
     });
 
     const [logoFile, setLogoFile] = useState(null);
-    const [logoPreview, setLogoPreview] = useState(''); // Corrected: initialized as an empty string for image URLs
+    const [logoPreview, setLogoPreview] = useState('');
 
     const currencyOptions = [
         { value: 'GBP', label: 'GBP - British Pound (£)' },
@@ -112,9 +111,9 @@ const SettingsPage = () => {
 
                 // --- DEBUG LOG: Initial fetched settings ---
                 console.log('--- SETTINGS PAGE: Initial fetchedSettings ---');
-                // CORRECTED: Access companyName directly from fetchedSettings
-                console.log('Company Name:', fetchedSettings.companyName); 
-                console.log('Global Invoice Email Enabled:', fetchedSettings.emailAutomation?.invoice_email?.enabled);
+                // CORRECTED: Access companyName from the nested 'company' object within 'settings'
+                console.log('Company Name:', fetchedSettings.settings?.company?.name); // Corrected access
+                console.log('Global Invoice Email Enabled:', fetchedSettings.settings?.emailAutomation?.invoice_email?.enabled); // Also corrected for consistency
                 console.log('--- END Initial fetchedSettings ---');
                 // --- END DEBUG LOG ---
 
@@ -125,51 +124,50 @@ const SettingsPage = () => {
 
                 setLocalSettings(prev => ({
                     ...prev,
-                    // CORRECTED: Access companyName directly from fetchedSettings
-                    companyName: fetchedSettings.companyName || '', 
-                    companyLogoUrl: fetchedSettings.companyLogoUrl || '',
-                    defaultFormName: fetchedSettings.defaultFormName || '',
-                    // Keep these as they seem to be nested under `company.settings` in the API response structure based on the screenshot
-                    companyAddress: fetchedSettings.company?.settings?.address || defaultAddress,
-                    companyPhone: fetchedSettings.company?.settings?.phone || '',
-                    companyEmail: fetchedSettings.company?.settings?.email || '',
-                    companyWebsite: fetchedSettings.company?.settings?.website || '',
-                    companyTaxId: fetchedSettings.company?.settings?.taxId || '',
+                    // CORRECTED: Access companyName from the nested 'company' object within 'settings'
+                    companyName: fetchedSettings.settings?.company?.name || '', // Corrected access
+                    companyLogoUrl: fetchedSettings.settings?.companyLogoUrl || '', // Corrected access
+                    defaultFormName: fetchedSettings.settings?.defaultFormName || '', // Corrected access
+                    // These were already correctly accessing nested `company.settings`
+                    companyAddress: fetchedSettings.settings?.company?.settings?.address || defaultAddress,
+                    companyPhone: fetchedSettings.settings?.company?.settings?.phone || '',
+                    companyEmail: fetchedSettings.settings?.company?.settings?.email || '',
+                    companyWebsite: fetchedSettings.settings?.company?.settings?.website || '',
+                    companyTaxId: fetchedSettings.settings?.company?.settings?.taxId || '',
 
-                    backgroundColor: fetchedSettings.backgroundColor || '#FFFFFF',
-                    primaryColor: fetchedSettings.primaryColor || '#3B82F6',
-                    borderColor: fetchedSettings.borderColor || '#D1D5DB',
-                    labelColor: fetchedSettings.labelColor || '#111827',
-                    inputButtonBorderRadius: fetchedSettings.inputButtonBorderRadius || '0.375rem',
+                    backgroundColor: fetchedSettings.settings?.backgroundColor || '#FFFFFF', // Corrected access
+                    primaryColor: fetchedSettings.settings?.primaryColor || '#3B82F6', // Corrected access
+                    borderColor: fetchedSettings.settings?.borderColor || '#D1D5DB', // Corrected access
+                    labelColor: fetchedSettings.settings?.labelColor || '#111827', // Corrected access
+                    inputButtonBorderRadius: fetchedSettings.settings?.inputButtonBorderRadius || '0.375rem', // Corrected access
 
-                    defaultCurrencyCode: fetchedSettings.defaultCurrency?.code || 'GBP',
-                    defaultCurrencySymbol: fetchedSettings.defaultCurrency?.symbol || '£',
-                    defaultCurrencyDecimalPlaces: fetchedSettings.defaultCurrency?.decimalPlaces || 2,
-                    defaultCurrencyThousandSeparator: fetchedSettings.defaultCurrency?.thousandSeparator || ',',
-                    defaultCurrencyDecimalSeparator: fetchedSettings.defaultCurrency?.decimalSeparator || '.',
-                    defaultCurrencyFormatTemplate: fetchedSettings.defaultCurrency?.formatTemplate || '{symbol}{amount}',
+                    defaultCurrencyCode: fetchedSettings.settings?.defaultCurrency?.code || 'GBP', // Corrected access
+                    defaultCurrencySymbol: fetchedSettings.settings?.defaultCurrency?.symbol || '£', // Corrected access
+                    defaultCurrencyDecimalPlaces: fetchedSettings.settings?.defaultCurrency?.decimalPlaces || 2, // Corrected access
+                    defaultCurrencyThousandSeparator: fetchedSettings.settings?.defaultCurrency?.thousandSeparator || ',', // Corrected access
+                    defaultCurrencyDecimalSeparator: fetchedSettings.settings?.defaultCurrency?.decimalSeparator || '.', // Corrected access
+                    defaultCurrencyFormatTemplate: fetchedSettings.settings?.defaultCurrency?.formatTemplate || '{symbol}{amount}', // Corrected access
 
-                    invoicePrefix: fetchedSettings.invoiceSettings?.invoicePrefix || 'INV-',
-                    nextInvoiceSeqNumber: fetchedSettings.invoiceSettings?.nextInvoiceSeqNumber || 1,
-                    defaultTaxRate: fetchedSettings.invoiceSettings?.defaultTaxRate || 0,
+                    invoicePrefix: fetchedSettings.settings?.invoiceSettings?.invoicePrefix || 'INV-', // Corrected access
+                    nextInvoiceSeqNumber: fetchedSettings.settings?.invoiceSettings?.nextInvoiceSeqNumber || 1, // Corrected access
+                    defaultTaxRate: fetchedSettings.settings?.invoiceSettings?.defaultTaxRate || 0, // Corrected access
 
                     // Populate emailAutomation from fetched settings
-                    // Now, default to true if fetched is undefined/null, for all as requested.
                     emailAutomation: {
-                        welcome_email: { enabled: fetchedSettings.emailAutomation?.welcome_email?.enabled ?? true },
+                        welcome_email: { enabled: fetchedSettings.settings?.emailAutomation?.welcome_email?.enabled ?? true }, // Corrected access
                         appointment_reminder: { 
-                            enabled: fetchedSettings.emailAutomation?.appointment_reminder?.enabled ?? true, // Changed to true
-                            daysBefore: fetchedSettings.emailAutomation?.appointment_reminder?.daysBefore ?? 1
+                            enabled: fetchedSettings.settings?.emailAutomation?.appointment_reminder?.enabled ?? true, // Corrected access
+                            daysBefore: fetchedSettings.settings?.emailAutomation?.appointment_reminder?.daysBefore ?? 1
                         },
-                        job_completion: { enabled: fetchedSettings.emailAutomation?.job_completion?.enabled ?? true }, // Changed to true
-                        invoice_email: { enabled: fetchedSettings.emailAutomation?.invoice_email?.enabled ?? true },
+                        job_completion: { enabled: fetchedSettings.settings?.emailAutomation?.job_completion?.enabled ?? true }, // Corrected access
+                        invoice_email: { enabled: fetchedSettings.settings?.emailAutomation?.invoice_email?.enabled ?? true }, // Corrected access
                         invoice_reminder: { 
-                            enabled: fetchedSettings.emailAutomation?.invoice_reminder?.enabled ?? true,
-                            daysAfter: fetchedSettings.emailAutomation?.invoice_reminder?.daysAfter ?? 7
+                            enabled: fetchedSettings.settings?.emailAutomation?.invoice_reminder?.enabled ?? true, // Corrected access
+                            daysAfter: fetchedSettings.settings?.emailAutomation?.invoice_reminder?.daysAfter ?? 7
                         },
                         review_request: { 
-                            enabled: fetchedSettings.emailAutomation?.review_request?.enabled ?? true,
-                            daysAfter: fetchedSettings.emailAutomation?.review_request?.daysAfter ?? 3
+                            enabled: fetchedSettings.settings?.emailAutomation?.review_request?.enabled ?? true, // Corrected access
+                            daysAfter: fetchedSettings.settings?.emailAutomation?.review_request?.daysAfter ?? 3
                         },
                     },
                 }));
@@ -180,8 +178,9 @@ const SettingsPage = () => {
                     email: fetchedUserProfile.email || '',
                 }));
 
-                if (fetchedSettings.companyLogoUrl) {
-                    setLogoPreview(fetchedSettings.companyLogoUrl);
+                // Corrected: Access companyLogoUrl from fetchedSettings.settings
+                if (fetchedSettings.settings?.companyLogoUrl) {
+                    setLogoPreview(fetchedSettings.settings.companyLogoUrl);
                 }
 
             } catch (err) {
@@ -193,7 +192,7 @@ const SettingsPage = () => {
         };
 
         fetchSettingsAndProfile();
-    }, [user, authLoading, defaultAddress]); // Added defaultAddress to dependency array as it's used in useCallback dependency.
+    }, [user, authLoading, defaultAddress]);
 
     const handleLocalSettingsChange = useCallback((e) => {
         const { name, value, type } = e.target;
@@ -326,7 +325,7 @@ const SettingsPage = () => {
                 emailAutomation: localSettings.emailAutomation, // Send the full object as is from state
 
                 // These are for the Company model (passed as top-level fields for backend processing)
-                name: localSettings.companyName, // This is correct for sending to the backend
+                name: localSettings.companyName,
                 address: localSettings.companyAddress,
                 phone: localSettings.companyPhone,
                 email: localSettings.companyEmail,
@@ -348,8 +347,7 @@ const SettingsPage = () => {
             console.log('--- SETTINGS PAGE: Response received from backend after save ---');
             console.log('Response Status:', res.status);
             console.log('Response Data:', res.data);
-            // CORRECTED: Access companyName directly from res.data.settings
-            console.log('Company Name (from response):', res.data.settings.companyName); 
+            console.log('Company Name (from response):', res.data.settings?.company?.name); // Access from nested 'company' object
             console.log('Global Invoice Email Enabled (from response):', res.data.settings?.emailAutomation?.invoice_email?.enabled);
             console.log('--- END Settings Page Response ---');
             // --- END DEBUG LOG ---
@@ -359,9 +357,8 @@ const SettingsPage = () => {
             setLocalSettings(prev => ({
                 ...prev,
                 companyLogoUrl: uploadedLogoUrl,
-                // CORRECTED: Access companyName directly from res.data.settings
-                companyName: res.data.settings.companyName, 
-                // Keep these as they seem to be nested under `company.settings` in the API response structure based on the screenshot
+                // CORRECTED: Access companyName from the nested 'company' object
+                companyName: res.data.settings.company?.name || '', // Access from nested 'company' object
                 companyAddress: res.data.settings.company?.settings?.address || defaultAddress,
                 companyPhone: res.data.settings.company?.settings?.phone || '',
                 companyEmail: res.data.settings.company?.settings?.email || '',
@@ -395,7 +392,8 @@ const SettingsPage = () => {
             setLogoFile(null);
 
             if (user && user.setUserData) {
-                user.setUserData(prev => ({ ...prev, company: { ...prev.company, name: res.data.settings.companyName } })); // Adjusted this line too
+                // CORRECTED: Access companyName from the nested 'company' object
+                user.setUserData(prev => ({ ...prev, company: { ...prev.company, name: res.data.settings.company?.name } }));
             }
             updateCurrency(res.data.settings.defaultCurrency);
 

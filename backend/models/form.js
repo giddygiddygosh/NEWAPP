@@ -1,11 +1,9 @@
-// backend/models/Form.js
-
 const mongoose = require('mongoose');
 
 const FormSchema = new mongoose.Schema({
-    company: {
-        type: mongoose.Schema.ObjectId,
-        ref: 'Company',
+    adminId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
         required: true,
     },
     name: {
@@ -13,35 +11,27 @@ const FormSchema = new mongoose.Schema({
         required: [true, 'Form name is required'],
         trim: true,
     },
-    schema: {
-        type: mongoose.Schema.Types.Mixed, // Use Mixed to store arbitrary data structures
+    formSchema: {
+        type: mongoose.Schema.Types.Mixed,
         required: [true, 'Form schema is required'],
     },
     purpose: {
         type: String,
-        // FIXED: Added 'reminder_task_list' to the enum
-        enum: ['customer_lead', 'booking_form', 'job_checklist', 'other', 'general', 'reminder_task_list'],
+        enum: ['customer_lead', 'booking_form', 'job_checklist', 'other', 'general', 'reminder_task_list', 'customer_quote'],
         default: 'other',
+    },
+    isActive: {
+        type: Boolean,
+        default: true,
     },
     companySpecific: {
         type: Boolean,
         default: true,
     },
-    createdAt: {
-        type: Date,
-        default: Date.now,
-    },
-    updatedAt: {
-        type: Date,
-        default: Date.now,
-    },
+}, {
+    timestamps: true // This automatically handles createdAt and updatedAt
 });
 
-FormSchema.index({ name: 1, company: 1 }, { unique: true });
-
-FormSchema.pre('save', function(next) {
-    this.updatedAt = Date.now();
-    next();
-});
+FormSchema.index({ name: 1, adminId: 1 }, { unique: true });
 
 module.exports = mongoose.model('Form', FormSchema);

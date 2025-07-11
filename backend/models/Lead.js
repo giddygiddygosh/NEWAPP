@@ -1,5 +1,3 @@
-// ServiceOS/backend/models/Lead.js
-
 const mongoose = require('mongoose');
 
 // NEW: Sub-schema for Email Contact (Mirroring Customer's)
@@ -8,15 +6,15 @@ const EmailContactSchema = new mongoose.Schema({
         type: String,
         trim: true,
         lowercase: true,
-        required: [true, 'Email address is required.'], 
+        required: [true, 'Email address is required.'], // This requires at least one valid email to be present
         match: [/.+@.+\..+/, 'Please fill a valid email address'],
     },
-    label: { 
+    label: {    
         type: String,
         trim: true,
         default: 'Primary',
     },
-    isMaster: { 
+    isMaster: {    
         type: Boolean,
         default: false,
     },
@@ -27,20 +25,20 @@ const PhoneContactSchema = new mongoose.Schema({
     number: {
         type: String,
         trim: true,
-        required: [true, 'Phone number is required.'],
+        required: [true, 'Phone number is required.'], // You may want to make phone number optional if not always provided
     },
-    label: { 
+    label: {    
         type: String,
         trim: true,
         default: 'Primary',
     },
-    isMaster: { 
+    isMaster: {    
         type: Boolean,
         default: false,
     },
 }, { _id: false });
 
-// Reusable Address Schema for Lead 
+// Reusable Address Schema for Lead    
 const AddressSchema = new mongoose.Schema({
     street: { type: String, trim: true },
     city: { type: String, trim: true },
@@ -61,27 +59,36 @@ const LeadSchema = new mongoose.Schema({
     },
     contactPersonName: {
         type: String,
-        required: [true, 'Contact person name is required'],
+        required: [true, 'Contact person name is required'], // REQUIRED FIELD
         trim: true,
     },
     // MODIFIED: 'email' field is now an array of EmailContactSchema
     email: {
         type: [EmailContactSchema],
-        default: [], 
+        default: [],    
         validate: {
             validator: function(v) {
+                // At least one email object must exist and have a non-empty email property if the array is not empty
+                const hasAtLeastOneEmail = v.length === 0 || v.some(e => e.email && e.email.trim() !== '');
+                if (!hasAtLeastOneEmail) {
+                    return false; // Fail validation if no emails provided or all are empty
+                }
                 const masterEmails = v.filter(e => e.isMaster);
-                return masterEmails.length <= 1;
+                return masterEmails.length <= 1; // Only one master email allowed
             },
-            message: props => `Only one master email is allowed.`
+            message: props => `At least one valid email address is required, and only one master email is allowed.` // CUSTOM ERROR MESSAGE
         }
     },
     // MODIFIED: 'phone' field is now an array of PhoneContactSchema
     phone: {
         type: [PhoneContactSchema],
-        default: [], 
+        default: [],    
         validate: {
             validator: function(v) {
+                // If you want phone to be strictly required for leads, uncomment the next line
+                // if (v.length === 0 || v.every(p => !p.number || p.number.trim() === '')) {
+                //     return false; // Fail validation if no phones provided or all are empty
+                // }
                 const masterPhones = v.filter(p => p.isMaster);
                 return masterPhones.length <= 1;
             },
@@ -94,12 +101,14 @@ const LeadSchema = new mongoose.Schema({
     },
     leadStatus: {
         type: String,
-        enum: ['New', 'Contacted', 'Qualified', 'Unqualified', 'Converted'],
+        // UPDATED: Added 'New Quote Request' to enum
+        enum: ['New', 'New Quote Request', 'Contacted', 'Qualified', 'Unqualified', 'Converted'],
         default: 'New',
     },
     leadSource: {
         type: String,
-        enum: ['Website', 'Referral', 'Social Media', 'Cold Call', 'Other'],
+        // UPDATED: Added 'Website Quote Form' to enum
+        enum: ['Website', 'Referral', 'Social Media', 'Cold Call', 'Other', 'Website Quote Form'],
         default: 'Other',
     },
     notes: {
@@ -134,6 +143,12 @@ const LeadSchema = new mongoose.Schema({
     updatedAt: {
         type: Date,
         default: Date.now,
+    },
+    // NEW: Link to form submission if created from one
+    formSubmission: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'Submission',
+        sparse: true, // Allow null values and partial indexes
     },
 });
 

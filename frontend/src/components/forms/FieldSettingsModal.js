@@ -1,5 +1,3 @@
-// src/components/forms/FieldSettingsModal.js
-
 import React, { useState, useEffect } from 'react';
 import Modal from '../common/Modal';
 import ModernInput from '../common/ModernInput';
@@ -8,36 +6,22 @@ import ModernSelect from '../common/ModernSelect';
 const FieldSettingsModal = ({ isOpen, onClose, field, onSave }) => {
     const [localField, setLocalField] = useState(field);
 
-    // Default styles for fields, consistent with FormBuilderPage
     const defaultFieldStyles = {
         labelColor: '#111827',
         inputTextColor: '#111827',
         inputBackgroundColor: '#FFFFFF',
         inputBorderColor: '#D1D5DB',
         inputBorderRadius: '0.375rem',
-        inputBorderWidth: 1, // Default individual border thickness
-        inputBorderStyle: 'solid', // Default individual border style
+        inputBorderWidth: 1,
+        inputBorderStyle: 'solid',
     };
 
+    // FIXED: Include Lead: Primary Phone in the mapping options
     const crmFieldMappingOptions = [
         { value: '', label: 'Do Not Map' },
-        { value: 'customer.contactPersonName', label: 'Customer: Contact Person Name' },
-        { value: 'customer.email', label: 'Customer: Primary Email' },
-        { value: 'customer.phone', label: 'Customer: Primary Phone' },
-        { value: 'customer.companyName', label: 'Customer: Company Name' },
-        { value: 'customer.address', label: 'Customer: Primary Address' },
-        { value: 'customer.customerType', label: 'Customer: Type' },
-        { value: 'customer.industry', label: 'Customer: Industry' },
-        { value: 'lead.contactPersonName', label: 'Lead: Contact Person Name' },
+        { value: 'lead.contactPersonName', label: 'Lead: Full Name (Primary Contact)' },
         { value: 'lead.email', label: 'Lead: Primary Email' },
-        { value: 'lead.phone', label: 'Lead: Primary Phone' },
-        { value: 'lead.companyName', label: 'Lead: Company Name' },
-        { value: 'lead.address', label: 'Lead: Primary Address' },
-        { value: 'bookingDate', label: 'Booking: Date' },
-        { value: 'bookingTime', label: 'Booking: Time' },
-        { value: 'serviceType', label: 'Booking: Service Type' },
-        { value: 'quoteItems', label: 'Quote: Items' },
-        { value: 'quoteDetails', label: 'Quote: Details' },
+        { value: 'lead.phone', label: 'Lead: Primary Phone' }, // Added back the phone mapping
     ];
 
     const borderStyleOptions = [
@@ -50,18 +34,19 @@ const FieldSettingsModal = ({ isOpen, onClose, field, onSave }) => {
 
 
     useEffect(() => {
-        // Initialize localField, ensuring styles exist with defaults and handling potential missing properties
         setLocalField({
             ...field,
-            // Deep merge styles to ensure all properties have defaults
             styles: {
                 ...defaultFieldStyles,
                 ...(field.styles || {})
             },
             mapping: field.mapping || '',
             conditional: field.conditional || null,
+            options: field.options || [],
+            required: field.required ?? false,
+            placeholder: field.placeholder || '',
         });
-    }, [field, isOpen]); // Re-initialize when modal opens or field changes
+    }, [field, isOpen]);
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -165,6 +150,7 @@ const FieldSettingsModal = ({ isOpen, onClose, field, onSave }) => {
                     name="placeholder"
                     value={localField.placeholder || ''}
                     onChange={handleChange}
+                    helpText="Hint text displayed inside the input field."
                 />
                 <div className="flex items-center">
                     <input
@@ -213,7 +199,6 @@ const FieldSettingsModal = ({ isOpen, onClose, field, onSave }) => {
                     </div>
                 )}
 
-                {/* CRM Field Mapping */}
                 <div className="p-4 border border-gray-200 rounded-lg bg-yellow-50 space-y-3">
                     <h3 className="text-lg font-bold text-gray-900 mb-4">CRM Field Mapping (For Specific Form Purposes)</h3>
                     <p className="text-sm text-gray-600 mb-3">Map this form field's data to a specific CRM Customer, Lead, or Booking property. This is essential for automatically populating records from form submissions.</p>
@@ -227,7 +212,6 @@ const FieldSettingsModal = ({ isOpen, onClose, field, onSave }) => {
                     />
                 </div>
 
-                {/* Conditional Visibility */}
                 {localField.type !== 'radio' && localField.type !== 'checkbox' && (
                     <div className="p-4 border border-gray-200 rounded-lg bg-indigo-50 space-y-3">
                         <h3 className="text-lg font-bold text-gray-900 mb-4">Conditional Visibility</h3>
@@ -250,20 +234,18 @@ const FieldSettingsModal = ({ isOpen, onClose, field, onSave }) => {
                         />
                         {localField.conditional?.field && localField.conditional?.value && (
                             <div className="text-sm text-green-700">
-                                This field will show if **{localField.conditional.field}** is **{localField.conditional.value}**.
+                                This field will show if <strong>{localField.conditional.field}</strong> is <strong>{localField.conditional.value}</strong>.
                             </div>
                         )}
                     </div>
                 )}
 
 
-                {/* Individual Field Styles */}
                 <div className="p-4 border border-gray-200 rounded-lg bg-gray-50 space-y-3">
                     <h3 className="text-lg font-bold text-gray-900 mb-4">Field Styling (Overrides Global)</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div className="flex flex-col">
                             <label htmlFor="field-labelColor" className="mb-2 text-sm font-medium text-gray-700">Label Color</label>
-                            {/* Ensured default value is always a valid hex color */}
                             <input id="field-labelColor" name="labelColor" type="color" value={localField.styles.labelColor || defaultFieldStyles.labelColor} onChange={handleStyleChange} className="w-full h-10 p-1 border-none cursor-pointer rounded-md" />
                         </div>
                         <div className="flex flex-col">
@@ -278,32 +260,32 @@ const FieldSettingsModal = ({ isOpen, onClose, field, onSave }) => {
                             <label htmlFor="field-inputBorderColor" className="mb-2 text-sm font-medium text-gray-700">Input Border Color</label>
                             <input id="field-inputBorderColor" name="inputBorderColor" type="color" value={localField.styles.inputBorderColor || defaultFieldStyles.inputBorderColor} onChange={handleStyleChange} className="w-full h-10 p-1 border-none cursor-pointer rounded-md" />
                         </div>
-                         <ModernInput
-                            label="Input Border Radius"
-                            name="inputBorderRadius"
-                            value={localField.styles.inputBorderRadius || defaultFieldStyles.inputBorderRadius} // Use default from defaultFieldStyles
-                            onChange={handleStyleChange}
-                            placeholder="e.g., 0.375rem or 8px"
-                            helpText="Applies to input fields. e.g., 0.375rem (rounded-md)"
-                        />
-                         <ModernInput
-                            label="Input Border Width (px)"
-                            name="inputBorderWidth"
-                            type="number"
-                            value={localField.styles.inputBorderWidth || defaultFieldStyles.inputBorderWidth} // Use default from defaultFieldStyles
-                            onChange={handleStyleChange}
-                            min="0"
-                            max="5"
-                            helpText="Thickness of input borders."
-                        />
-                        <ModernSelect
-                            label="Input Border Style"
-                            name="inputBorderStyle"
-                            value={localField.styles.inputBorderStyle || defaultFieldStyles.inputBorderStyle} // Use default from defaultFieldStyles
-                            onChange={handleStyleChange}
-                            options={borderStyleOptions}
-                            helpText="Style of input borders."
-                        />
+                           <ModernInput
+                                label="Input Border Radius"
+                                name="inputBorderRadius"
+                                value={localField.styles.inputBorderRadius || defaultFieldStyles.inputBorderRadius}
+                                onChange={handleStyleChange}
+                                placeholder="e.g., 0.375rem or 8px"
+                                helpText="Applies to input fields. e.g., 0.375rem (rounded-md)"
+                            />
+                           <ModernInput
+                                label="Input Border Width (px)"
+                                name="inputBorderWidth"
+                                type="number"
+                                value={localField.styles.inputBorderWidth || defaultFieldStyles.inputBorderWidth}
+                                onChange={handleStyleChange}
+                                min="0"
+                                max="5"
+                                helpText="Thickness of input borders."
+                            />
+                            <ModernSelect
+                                label="Input Border Style"
+                                name="inputBorderStyle"
+                                value={localField.styles.inputBorderStyle || defaultFieldStyles.inputBorderStyle}
+                                onChange={handleStyleChange}
+                                options={borderStyleOptions}
+                                helpText="Style of input borders."
+                            />
                     </div>
                 </div>
 

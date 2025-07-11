@@ -1,5 +1,3 @@
-// backend/server.js
-
 const express = require('express');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
@@ -30,7 +28,7 @@ app.use((req, res, next) => {
 });
 
 app.use(cors({
-    origin: '*',
+    origin: '*', // Adjust this for production to be more specific
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
 }));
@@ -53,7 +51,9 @@ const emailTemplateRoutes = require('./routes/emailTemplateRoutes');
 const absenceRoutes = require('./routes/absenceRoutes');
 const invoiceRoutes = require('./routes/invoiceRoutes');
 const dailyTimeRoutes = require('./routes/dailyTimeRoutes');
-const payrollRoutes = require('./routes/payrollRoutes'); // <--- ADD THIS LINE
+const payrollRoutes = require('./routes/payrollRoutes');
+const customerPortalRoutes = require('./routes/customerPortalRoutes');
+const mailRoutes = require('./routes/mailRoutes'); // <<< 1. ADD THIS LINE
 
 // Make the 'uploads' folder static
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -71,9 +71,11 @@ app.use('/api/stock', stockRoutes);
 app.use('/api/email-templates', emailTemplateRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/absences', absenceRoutes);
-app.use('/api/public/forms', publicRoutes);
 app.use('/api/daily-time', dailyTimeRoutes);
-app.use('/api/payroll', payrollRoutes); // <--- ADD THIS LINE
+app.use('/api/payroll', payrollRoutes);
+app.use('/api/public', publicRoutes);
+app.use('/api/customer-portal', customerPortalRoutes);
+app.use('/api/mail', mailRoutes); // <<< 2. ADD THIS LINE
 
 app.get('/', (req, res) => {
     res.send('API is running...');

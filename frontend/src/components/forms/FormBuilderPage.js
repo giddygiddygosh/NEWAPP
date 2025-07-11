@@ -1,5 +1,3 @@
-// ServiceOS/frontend/src/components/forms/FormBuilderPage.js
-
 import React, { useState, useCallback, useEffect, Fragment, useRef } from 'react';
 import { useDrop } from 'react-dnd';
 import { v4 as uuidv4 } from 'uuid';
@@ -10,15 +8,18 @@ import ModernSelect from '../common/ModernSelect';
 import Modal from '../common/Modal';
 
 import FieldSettingsModal from './FieldSettingsModal';
-import FormRenderer from './FormRenderer';
+import FormRenderer from '../../components/forms/FormRenderer';
 import DraggableFieldType from './DraggableFieldType';
-import ColumnComponent from './ColumnComponent';
 import RowComponent from './RowComponent';
 
 import {
-    PencilIcon, TrashIcon, Bars2Icon, CursorArrowRaysIcon, EnvelopeIcon, PhoneIcon, DocumentTextIcon, CheckIcon, CalendarIcon, ListBulletIcon, MapPinIcon,
-    ClockIcon, QueueListIcon, ArrowUpTrayIcon, EyeIcon, PlusCircleIcon, CodeBracketIcon,
-    ClipboardDocumentListIcon // CHANGED: Replaced ListChecksIcon with ClipboardDocumentListIcon
+    PencilIcon, TrashIcon,
+    EyeIcon, PlusCircleIcon, CodeBracketIcon,
+    UserIcon, BuildingOfficeIcon, MapPinIcon,
+    EnvelopeIcon, PhoneIcon, DocumentTextIcon, CheckIcon, CalendarIcon, ListBulletIcon,
+    ClockIcon, QueueListIcon, ArrowUpTrayIcon,
+    ClipboardDocumentListIcon,
+    CursorArrowRaysIcon,
 } from '@heroicons/react/24/outline';
 
 const ItemTypes = {
@@ -27,18 +28,18 @@ const ItemTypes = {
     ROW: 'row'
 };
 
-const defaultGlobalStyles = { // Renamed from defaultStyles for clarity (global vs field)
+const defaultGlobalStyles = {
     logoUrl: '',
     backgroundColor: '#FFFFFF',
     primaryColor: '#2563EB',
-    borderColor: '#D1D5DB', // Global border color for inputs/selects
+    borderColor: '#D1D5DB',
     labelColor: '#111827',
-    borderRadius: '0.375rem', // Default for rounded-md
-    globalBorderWidth: 1,      // NEW: Default border thickness in px
-    globalBorderStyle: 'solid', // NEW: Default border style
+    borderRadius: '0.375rem',
+    globalBorderWidth: 1,
+    globalBorderStyle: 'solid',
 };
 
-const defaultFieldStyles = { // Default styles for individual fields (used in FieldSettingsModal and when creating new fields)
+const defaultFieldStyles = {
     labelColor: '#111827',
     inputTextColor: '#111827',
     inputBackgroundColor: '#FFFFFF',
@@ -51,8 +52,8 @@ const defaultFieldStyles = { // Default styles for individual fields (used in Fi
 
 const FormBuilderPage = () => {
     const [formName, setFormName] = useState('');
-    const [formPurpose, setFormPurpose] = useState('general'); // NEW: State for form purpose
-    const [formStyles, setFormStyles] = useState(defaultGlobalStyles); // Now formStyles refers to global styles
+    const [formPurpose, setFormPurpose] = useState('general');
+    const [formStyles, setFormStyles] = useState(defaultGlobalStyles);
     const [formRows, setFormRows] = useState([]);
     const [editingField, setEditingField] = useState(null);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -63,7 +64,6 @@ const FormBuilderPage = () => {
     const [formsList, setFormsList] = useState([]);
     const [selectedFormId, setSelectedFormId] = useState('');
     const [activeTab, setActiveTab] = useState('canvas');
-
     const [generatedEmbedSnippet, setGeneratedEmbedSnippet] = useState('');
 
     const borderStyleOptions = [
@@ -73,12 +73,18 @@ const FormBuilderPage = () => {
         { value: 'dotted', label: 'Dotted' },
     ];
 
-    // UPDATED: Options for Form Purpose
     const formPurposeOptions = [
         { value: 'general', label: 'General Form' },
         { value: 'customer_booking', label: 'Website Booking Form' },
         { value: 'customer_quote', label: 'Quote Request Form' },
-        { value: 'reminder_task_list', label: 'Reminder Task List Form (Staff Only)' }, // NEW purpose
+        { value: 'reminder_task_list', label: 'Reminder Task List Form (Staff Only)' },
+    ];
+
+    // CRM Field Definitions - Only Contact Name, Contact Email, and Primary Phone
+    const crmFieldTypes = [
+        { type: 'text', label: 'Contact Name', fieldType: 'crm_contact_name', icon: UserIcon, mapping: 'lead.contactPersonName', required: true, placeholder: 'Enter contact name' },
+        { type: 'email', label: 'Contact Email', fieldType: 'crm_contact_email', icon: EnvelopeIcon, mapping: 'lead.email', required: true, placeholder: 'Enter email address' },
+        { type: 'phone', label: 'Primary Phone', fieldType: 'crm_primary_phone', icon: PhoneIcon, mapping: 'lead.phone', required: true, placeholder: 'Enter phone number' },
     ];
 
 
@@ -92,14 +98,7 @@ const FormBuilderPage = () => {
             return;
         }
         const embedScriptUrl = `${window.location.origin}/static/js/form-embed.js`;
-        
-        // Ensure to include the form's company ID if needed for filtering forms
-        // For public forms, the formId itself should be sufficient for the backend
-        // to retrieve the form and thus the company ID it belongs to.
-        // const companyId = user?.company?._id; // You might need user context here if generating snippet depends on company
-
         const containerId = `serviceos-form-${formId}`;
-
         const snippet = `
 <div id="${containerId}" data-serviceos-form-id="${formId}" style="width: 100%; max-width: 800px; margin: 0 auto;">Loading your form...</div>
 <script src="${embedScriptUrl}" async></script>
@@ -123,6 +122,9 @@ const FormBuilderPage = () => {
         try {
             const res = await api.get('/forms');
             setFormsList(res.data);
+            if (selectedFormId) {
+                const currentFormInList = res.data.find(f => f._id === selectedFormId);
+            }
         } catch (err) {
             console.error('Error fetching forms list:', err);
             setError('Failed to load forms list.');
@@ -138,17 +140,17 @@ const FormBuilderPage = () => {
         try {
             const res = await api.get(`/forms/${formId}`);
             setFormName(res.data.name);
-            setFormPurpose(res.data.purpose || 'general'); // Load form purpose
+            setFormPurpose(res.data.purpose || 'general');
             setFormStyles({ ...defaultGlobalStyles, ...(res.data.settings?.styles || {}) });
             
-            const loadedSchema = res.data.schema || [];
+            const loadedSchema = res.data.formSchema || [];
             const loadedRows = loadedSchema.map(row => ({
-                ...row, id: row.id || uuidv4(), columns: row.columns.map(col => ({ // Ensure row/col IDs are retained or generated
+                ...row, id: row.id || uuidv4(), columns: row.columns.map(col => ({
                 ...col, id: col.id || uuidv4(), fields: col.fields.map(f => ({
                     ...f,
-                    id: f.id || uuidv4(), // Ensure field IDs are retained or generated
+                    id: f.id || uuidv4(),
                     ref: React.createRef(),
-                    styles: { ...defaultFieldStyles, ...(f.styles || {}) } // Load individual field styles
+                    styles: { ...defaultFieldStyles, ...(f.styles || {}) }
                 }))
                 }))
             }));
@@ -166,7 +168,7 @@ const FormBuilderPage = () => {
 
     const handleNewForm = useCallback(() => {
         setFormName('');
-        setFormPurpose('general'); // Reset purpose to default
+        setFormPurpose('general');
         setFormRows([]);
         setSelectedFormId('');
         setFormStyles(defaultGlobalStyles);
@@ -205,8 +207,25 @@ const FormBuilderPage = () => {
                 return;
             }
             if (item.type === ItemTypes.FIELD_TYPE) {
-                // NEW LOGIC FOR TASK_ITEM
-                if (item.fieldType === 'task_item') {
+                let newField = {};
+
+                const crmFieldMatch = crmFieldTypes.find(f => f.fieldType === item.fieldType);
+                
+                if (crmFieldMatch) {
+                    newField = {
+                        id: uuidv4(),
+                        label: crmFieldMatch.label,
+                        // This uses the last part of the mapping (e.g., 'contactPersonName' from 'lead.contactPersonName')
+                        name: crmFieldMatch.mapping.split('.').pop(), 
+                        type: crmFieldMatch.type,
+                        placeholder: crmFieldMatch.placeholder,
+                        required: crmFieldMatch.required,
+                        options: [],
+                        mapping: crmFieldMatch.mapping, // Keep mapping for backend processing logic
+                        ref: React.createRef(),
+                        styles: { ...defaultFieldStyles }
+                    };
+                } else if (item.fieldType === 'task_item') {
                     const taskItemId = uuidv4();
                     const taskNameField = {
                         id: uuidv4(), label: 'Task Description', name: `task_${taskItemId}_description`, type: 'text', placeholder: 'Enter task description', required: true, styles: { ...defaultFieldStyles }, mapping: `task_item.${taskItemId}.description`
@@ -222,12 +241,13 @@ const FormBuilderPage = () => {
                         columns: [{ id: uuidv4(), width: 'full', fields: [taskNameField, completedField, reasonField] }]
                     };
                     setFormRows(prevRows => [...prevRows, newRow]);
+                    return;
                 } else {
-                    // Existing logic for other field types
-                    const newField = {
+                    newField = {
                         id: uuidv4(),
                         label: item.label,
-                        name: item.fieldType.toLowerCase().replace(' ', '_') + '_' + uuidv4().slice(0, 4),
+                        // Keep dynamic name for non-CRM, non-task fields
+                        name: item.fieldType.toLowerCase().replace(' ', '_') + '_' + uuidv4().slice(0, 4), 
                         type: item.fieldType,
                         placeholder: '',
                         required: false,
@@ -235,12 +255,14 @@ const FormBuilderPage = () => {
                         ref: React.createRef(),
                         styles: { ...defaultFieldStyles }
                     };
-                    const newRow = {
-                        id: uuidv4(),
-                        columns: [{ id: uuidv4(), width: 'full', fields: [newField] }]
-                    };
-                    setFormRows(prevRows => [...prevRows, newRow]);
                 }
+                
+                const newRow = {
+                    id: uuidv4(),
+                    columns: [{ id: uuidv4(), width: 'full', fields: [newField] }]
+                };
+                setFormRows(prevRows => [...prevRows, newRow]);
+
             } else if (item.type === ItemTypes.ROW) {
                 const dragIndex = item.index;
                 const hoverIndex = formRows.length - 1;
@@ -252,7 +274,7 @@ const FormBuilderPage = () => {
             isOver: monitor.isOver(),
             canDrop: monitor.canDrop(),
         }),
-    }), [formRows, moveRow]); // Add formRows to dependency array for drop
+    }), [formRows, moveRow, crmFieldTypes]);
 
     const moveField = useCallback((draggedFieldId, targetColumnId, targetRowId, hoverIndex, sourceColumnId, sourceRowId) => {
         setFormRows(prevRows => {
@@ -368,13 +390,14 @@ const FormBuilderPage = () => {
                     })
                 }))
             }));
+            
             const formPayload = {
                 name: formName,
-                schema: formSchemaToSave,
+                formSchema: formSchemaToSave,
                 settings: {
                     styles: formStyles
                 },
-                purpose: formPurpose, // Include formPurpose in payload
+                purpose: formPurpose,
             };
             let res;
             if (selectedFormId && !isNew) {
@@ -385,11 +408,59 @@ const FormBuilderPage = () => {
                 setSelectedFormId(res.data.form._id);
                 setSuccessMessage('Form saved successfully!');
             }
-            fetchForms();
+            fetchForms(); 
             generateSnippet(res.data.form?._id || selectedFormId);
         } catch (err) {
             console.error('Error saving form:', err);
             setError(err.response?.data?.message || 'Failed to save form.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleActivateForm = async () => {
+        if (!selectedFormId) {
+            setError("Please select a form to activate.");
+            return;
+        }
+
+        setLoading(true);
+        setError(null);
+        setSuccessMessage(null);
+
+        try {
+            await api.put(`/forms/${selectedFormId}/activate`);
+            setSuccessMessage('Form activated successfully! It is now live.');
+            fetchForms(); 
+        } catch (err) {
+            console.error('Error activating form:', err);
+            setError(err.response?.data?.message || 'Failed to activate form.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDeactivateForm = async () => {
+        if (!selectedFormId) {
+            setError("Please select a form to deactivate.");
+            return;
+        }
+
+        if (!window.confirm("Are you sure you want to deactivate this form? It will no longer be publicly accessible.")) {
+            return;
+        }
+
+        setLoading(true);
+        setError(null);
+        setSuccessMessage(null);
+
+        try {
+            await api.put(`/forms/${selectedFormId}/deactivate`); 
+            setSuccessMessage('Form deactivated successfully!');
+            fetchForms(); 
+        } catch (err) {
+            console.error('Error deactivating form:', err);
+            setError(err.response?.data?.message || 'Failed to deactivate form.');
         } finally {
             setLoading(false);
         }
@@ -440,7 +511,7 @@ const FormBuilderPage = () => {
     }, []);
 
     const previewDefinition = {
-        schema: formRows.map(row => ({
+        formSchema: formRows.map(row => ({
             id: row.id,
             columns: row.columns.map(col => ({
                 id: col.id, width: col.width,
@@ -450,8 +521,12 @@ const FormBuilderPage = () => {
         settings: {
             styles: formStyles
         },
-        purpose: formPurpose, // Pass formPurpose to preview
+        purpose: formPurpose,
     };
+
+    const currentSelectedForm = selectedFormId ? formsList.find(f => f._id === selectedFormId) : null;
+    const isCurrentlyActive = currentSelectedForm ? currentSelectedForm.isActive : false;
+
 
     return (
         <Fragment>
@@ -459,6 +534,18 @@ const FormBuilderPage = () => {
                 <div className="w-72 bg-white p-6 rounded-xl shadow-lg mr-8 h-fit sticky top-8">
                     <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-3 border-gray-200">Form Elements</h2>
                     <div className="space-y-3">
+                        <h3 className="text-lg font-semibold text-gray-700 mt-4 mb-2">CRM Fields</h3>
+                        {/* Only render CRM field types that are defined in the crmFieldTypes array */}
+                        {crmFieldTypes.map(field => (
+                            <DraggableFieldType 
+                                key={field.fieldType} 
+                                type={field.type} 
+                                label={field.label} 
+                                fieldType={field.fieldType}
+                                icon={field.icon} 
+                            />
+                        ))}
+                        <h3 className="text-lg font-semibold text-gray-700 mt-4 mb-2">Standard Fields</h3>
                         <DraggableFieldType type="text" label="Text Input" icon={CursorArrowRaysIcon} />
                         <DraggableFieldType type="textarea" label="Text Area" icon={DocumentTextIcon} />
                         <DraggableFieldType type="email" label="Email" icon={EnvelopeIcon} />
@@ -470,7 +557,6 @@ const FormBuilderPage = () => {
                         <DraggableFieldType type="time" label="Time" icon={ClockIcon} />
                         <DraggableFieldType type="address" label="Address (Autocomplete)" icon={MapPinIcon} />
                         <DraggableFieldType type="file" label="File Upload" icon={ArrowUpTrayIcon} />
-                        {/* NEW Draggable Field Type for Task Item */}
                         <DraggableFieldType type="task_item" label="Task Item (Staff Only)" icon={ClipboardDocumentListIcon} />
                     </div>
                 </div>
@@ -487,15 +573,47 @@ const FormBuilderPage = () => {
                                 required
                             />
                         </div>
-                        <div className="flex items-end space-x-4 h-full pt-6">
+                        <div className="flex items-end space-x-2 h-full pt-6">
                             <ModernSelect
                                 label="Load Existing Form"
                                 name="loadForm"
                                 value={selectedFormId}
                                 onChange={handleLoadExistingFormChange}
-                                options={[{ value: '', label: 'Select a form' }, ...formsList.map(f => ({ value: f._id, label: f.name }))]}
+                                options={[{ value: '', label: 'Select a form' }, ...formsList.map(f => ({ 
+                                    value: f._id, 
+                                    label: `${f.name}${f.isActive ? ' (Active)' : ''}`
+                                }))]}
                             />
-                            <button type="button" onClick={handleNewForm} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">New</button>
+                            
+                            {/* Activate/Deactivate Buttons */}
+                            {selectedFormId && (
+                                <>
+                                    {isCurrentlyActive ? (
+                                        <button 
+                                            type="button" 
+                                            onClick={handleDeactivateForm} 
+                                            className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 disabled:bg-gray-400"
+                                            disabled={loading}
+                                            title="Deactivate this form so it's no longer publicly accessible."
+                                        >
+                                            Deactivate
+                                        </button>
+                                    ) : (
+                                        <button 
+                                            type="button" 
+                                            onClick={handleActivateForm} 
+                                            className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:bg-gray-400"
+                                            disabled={loading}
+                                            title="Make this form live for public pages."
+                                        >
+                                            Activate
+                                        </button>
+                                    )}
+                                </>
+                            )}
+                            <button type="button" onClick={handleNewForm} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">
+                                New
+                            </button>
                         </div>
                     </div>
 
@@ -541,7 +659,6 @@ const FormBuilderPage = () => {
 
                     {activeTab === 'styling' && (
                         <div className="p-6 border rounded-lg bg-gray-50/80 space-y-6">
-                            {/* NEW: Form Purpose Selector */}
                             <ModernSelect
                                 label="Form Purpose"
                                 name="formPurpose"
@@ -562,7 +679,7 @@ const FormBuilderPage = () => {
                                     helpText="Paste a direct link to your hosted logo image."
                                 />
                             </div>
-                              <div>
+                                <div>
                                 <h3 className="text-xl font-semibold text-gray-800 mb-4">Colors & Appearance</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     <div className="flex flex-col">
@@ -621,6 +738,7 @@ const FormBuilderPage = () => {
                             <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
                                 <CodeBracketIcon className="h-6 w-6 mr-2 text-gray-700" /> Embed Form on Your Website
                             </h3>
+                            {/* FIX: Escaped <body> tag correctly */}
                             <p className="text-gray-600">
                                 Copy and paste the HTML snippet below into your website's `&lt;body&gt;` section where you want the form to appear.
                                 Ensure your form is saved to generate the latest snippet.
@@ -698,5 +816,3 @@ const FormBuilderPage = () => {
 };
 
 export default FormBuilderPage;
-
-

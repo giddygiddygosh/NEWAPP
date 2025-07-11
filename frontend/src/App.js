@@ -4,7 +4,6 @@ import React, { useState, useLayoutEffect, createContext, useContext } from 'rea
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/context/AuthContext';
 import { CurrencyProvider } from './components/context/CurrencyContext';
-// REMOVED: ChatProvider import
 
 // --- COMPONENT IMPORTS ---
 import LoginPage from './components/auth/LoginPage';
@@ -12,13 +11,14 @@ import SignUpPage from './components/auth/SignUpPage';
 import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
 import CustomerPage from './components/customers/CustomerPage';
 import Dashboard from './components/dashboard/Dashboard';
-import LeadsView from './components/customers/LeadsView';
+import LeadsView from './components/customers/LeadsView'; // Still import LeadsView for its own route
 import Sidebar from './components/navigation/Sidebar';
 import SettingsPage from './components/settings/SettingsPage';
 import EmailTemplatesView from './components/email-templates/EmailTemplatesView';
 import FormBuilderPage from './components/forms/FormBuilderPage';
-import PublicFormPage from './components/forms/PublicFormPage';
+import PublicFormPage from './components/forms/PublicFormPage'; // For embedded forms by ID
 import CustomerDashboard from './components/customerPortal/CustomerDashboard';
+import QuoteRequestPage from './components/customerPortal/QuoteRequestPage'; // For the public quote request form
 import StaffPage from './components/staff/StaffPage';
 import StaffDashboard from './components/staffPortal/StaffDashboard';
 import SchedulerView from './components/scheduler/SchedulerView';
@@ -30,8 +30,6 @@ import InvoicePage from './components/invoices/InvoicePage';
 import InvoiceDetails from './components/invoices/InvoiceDetails';
 import StaffSchedulePage from './components/staffPortal/StaffSchedulePage';
 import PayrollPage from './components/payroll/PayrollPage';
-
-// REMOVED: Chat Component Imports
 
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -102,7 +100,7 @@ function AppContent() {
 
     useLayoutEffect(() => {
         const updateSidebarState = () => setIsSidebarOpen(window.innerWidth >= 768);
-        const noSidebarRoutes = ['/login', '/signup', '/forgot-password'];
+        const noSidebarRoutes = ['/login', '/signup', '/forgot-password', '/quote-request']; 
         const canShowSidebar = user && !loading && !noSidebarRoutes.includes(location.pathname) && !location.pathname.startsWith('/forms/');
 
         if (canShowSidebar && ['admin', 'manager', 'staff'].includes(user.role)) {
@@ -116,7 +114,7 @@ function AppContent() {
     }, [user, loading, location.pathname]);
 
     const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-    const showSidebarLayout = user && !['/login', '/signup', '/forgot-password'].includes(location.pathname) && !location.pathname.startsWith('/forms/') && ['admin', 'manager', 'staff'].includes(user.role);
+    const showSidebarLayout = user && !['/login', '/signup', '/forgot-password', '/quote-request'].includes(location.pathname) && !location.pathname.startsWith('/forms/') && ['admin', 'manager', 'staff'].includes(user.role);
 
     return (
         <div className="flex h-screen bg-gray-50">
@@ -130,10 +128,16 @@ function AppContent() {
                         <Route path="/login" element={<LoginPage />} />
                         <Route path="/signup" element={<SignUpPage />} />
                         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-                        <Route path="/forms/:id" element={<PublicFormPage />} />
+                        <Route path="/forms/:id" element={<PublicFormPage />} /> {/* For embedded forms by ID */}
+                        <Route path="/quote-request" element={<QuoteRequestPage />} /> {/* For the public quote request form */}
 
                         {/* Private Routes */}
                         <Route path="/customer-portal" element={<PrivateRoute roles={['customer']}><CustomerDashboard /></PrivateRoute>} />
+                        {/* Optional: Add sub-routes for customer portal here (e.g., /customer-portal/invoices) */}
+                        {/* <Route path="/customer-portal/invoices" element={<PrivateRoute roles={['customer']}><CustomerInvoicesPage /></PrivateRoute>} /> */}
+                        {/* <Route path="/customer-portal/appointments" element={<PrivateRoute roles={['customer']}><CustomerAppointmentsPage /></PrivateRoute>} /> */}
+                        {/* <Route path="/customer-portal/emergency" element={<PrivateRoute roles={['customer']}><CustomerEmergencyPage /></PrivateRoute>} /> */}
+
                         <Route path="/staff-dashboard" element={<PrivateRoute roles={['staff', 'manager']}><StaffDashboard /></PrivateRoute>} />
                         <Route path="/staff-schedule" element={<PrivateRoute roles={['staff', 'manager', 'admin']}><StaffSchedulePage /></PrivateRoute>} />
                         <Route path="/dashboard" element={<PrivateRoute roles={['admin', 'manager']}><Dashboard /></PrivateRoute>} />
@@ -144,22 +148,21 @@ function AppContent() {
                         <Route path="/settings" element={<PrivateRoute roles={['admin']}><SettingsPage /></PrivateRoute>} />
                         <Route path="/scheduler" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><DndProvider backend={HTML5Backend}><SchedulerView /></DndProvider></PrivateRoute>} />
                         <Route path="/stock" element={<PrivateRoute roles={['admin', 'manager', 'staff']}><StockView /></PrivateRoute>} />
-                        <Route path="/spot-checker" element={<PrivateRoute roles={['admin', 'manager', 'staff']}><SpotCheckerPage /></PrivateRoute>} />
+                        <Route path="/spot-checker" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><SpotCheckerPage /></PrivateRoute>} />
                         <Route path="/route-planner" element={<PrivateRoute roles={['admin', 'manager']}><RoutePlannerView /></PrivateRoute>} />
                         <Route path="/staff-absence" element={<PrivateRoute roles={['admin', 'manager']}><StaffAbsencePage /></PrivateRoute>} />
                         <Route path="/email-templates" element={<PrivateRoute roles={['admin']}><EmailTemplatesView /></PrivateRoute>} />
-
-                        {/* REMOVED: Admin and Staff Chat Routes */}
 
                         {/* --- INVOICE ROUTES --- */}
                         <Route path="/invoices" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><InvoicePage /></PrivateRoute>} />
                         <Route path="/invoices/:invoiceId" element={<PrivateRoute roles={['admin', 'manager', 'staff']}><InvoiceDetails /></PrivateRoute>} />
                         
-                        {/* NEW: Payroll Page Route - Replaces old placeholder */}
+                        {/* Payroll Page Route */}
                         <Route path="/payroll" element={<PrivateRoute roles={['admin', 'manager']}><PayrollPage /></PrivateRoute>} />
                         
                         <Route path="/jobs" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><div className="p-8">Job Management Page</div></PrivateRoute>} />
-                        <Route path="/quotes" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><div className="p-8">Quotes Page</div></PrivateRoute>} />
+                        {/* Reverted /quotes to its original placeholder */}
+                        <Route path="/quotes" element={<PrivateRoute roles={['admin', 'staff', 'manager']}><div className="p-8">Quotes Page</div></PrivateRoute>} /> 
                         <Route path="/commission-report" element={<PrivateRoute roles={['admin', 'manager']}><div className="p-8">Commission Report Page</div></PrivateRoute>} />
 
                         {/* Default Route */}
@@ -176,7 +179,6 @@ function App() {
         <Router>
             <AuthProvider>
                 <CurrencyProvider>
-                    {/* REMOVED: ChatProvider wrapper */}
                     <MapsApiProvider>
                         <AppContent />
                     </MapsApiProvider>

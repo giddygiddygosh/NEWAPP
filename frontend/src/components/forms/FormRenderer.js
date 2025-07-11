@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle, useMemo } from 'react';
 import { useLoadScript, Autocomplete } from '@react-google-maps/api';
-import ModernInput from '../common/ModernInput';
-import ModernSelect from '../common/ModernSelect'; // Corrected import
+import ModernInput from '../common/ModernInput'; // Make sure this path is correct
+import ModernSelect from '../common/ModernSelect'; // Make sure this path is correct
 import { useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 
+// === Helper Constants (moved from inside component to top level) ===
 const libraries = ['places'];
 
 const UK_BOUNDS = {
@@ -34,27 +35,35 @@ const defaultFieldStyles = {
     inputBorderWidth: 1,
     inputBorderStyle: 'solid',
 };
+// === End Helper Constants ===
 
 
 const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, isLoading: isSubmitting = false, submitButtonText = "Submit Form" }, ref) => {
+    // === State variables (already defined here, good!) ===
     const [formData, setFormData] = useState({});
     const [formErrors, setFormErrors] = useState({});
     const [isFormSubmitted, setIsFormSubmitted] = useState(false);
 
+    // === Refs (already defined here, good!) ===
     const autocompleteRefs = useRef({});
+
+    // === Hooks (already defined here, good!) ===
     const location = useLocation();
 
+    // === Memoized values (already defined here, good!) ===
     const schema = useMemo(() => formDefinition?.formSchema || [], [formDefinition]);
     const globalStyles = useMemo(() => ({ ...defaultGlobalStyles, ...(formDefinition?.settings?.styles || {}) }), [formDefinition]);
 
+    // === Other variables / hooks ===
     const queryParams = new URLSearchParams(location.search);
     const associatedLeadId = queryParams.get('leadId');
 
     const { isLoaded, loadError } = useLoadScript({
         googleMapsApiKey: process.env.REACT_APP_MAPS_API_KEY,
-        libraries,
+        libraries, // Uses the 'libraries' constant defined above
     });
 
+    // === Helper Functions (defined using useCallback, which is correct) ===
     const findFieldInSchema = useCallback((fieldName) => {
         for (const row of schema) {
             for (const col of (row.columns || [])) {
@@ -63,8 +72,7 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
             }
         }
         return null;
-    }, [schema]);
-
+    }, [schema]); // 'schema' is correctly a dependency
 
     const initializeFormData = useCallback(() => {
         const initialData = {};
@@ -86,9 +94,9 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
             });
         }
         return initialData;
-    }, [schema]);
+    }, [schema]); // 'schema' is correctly a dependency
 
-
+    // useEffect and useImperativeHandle (already correctly defined)
     useEffect(() => {
         setFormData(initializeFormData());
         setFormErrors({});
@@ -103,7 +111,6 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
         }
     }));
 
-
     const isFieldVisible = useCallback((field) => {
         if (!field.conditional || isPreview) {
             return true;
@@ -111,7 +118,7 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
         const watchedFieldName = field.conditional.field;
         const requiredValue = field.conditional.value;
         return formData[watchedFieldName] !== undefined && formData[watchedFieldName] === requiredValue;
-    }, [formData, isPreview]);
+    }, [formData, isPreview]); // 'formData' and 'isPreview' are correctly dependencies
 
     const validateField = useCallback((field, value, currentFormData, errorsAccumulator) => {
         const isValueEffectivelyEmpty = (val, type) => {
@@ -135,8 +142,7 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
         }
 
         return true;
-    }, []);
-
+    }, []); // No external dependencies, but if currentFormData or other states are used in validation rules, add them.
 
     const handleChange = useCallback((e) => {
         const { name, value, type, checked, files } = e.target;
@@ -156,37 +162,36 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
             rootFieldName = parts.slice(0, -1).join('_');
         }
 
-        const fieldSchema = findFieldInSchema(rootFieldName); 
+        const fieldSchema = findFieldInSchema(rootFieldName); // Uses findFieldInSchema
 
         if (fieldSchema && fieldSchema.type === 'address') {
             const subFieldName = parts[parts.length - 1];
-            setFormData(prev => ({ 
-                ...prev, 
-                [rootFieldName]: { 
-                    ...(prev[rootFieldName] || initializeFormData()[rootFieldName]),
-                    [subFieldName]: newValue 
-                } 
+            setFormData(prev => ({
+                ...prev,
+                [rootFieldName]: {
+                    ...(prev[rootFieldName] || initializeFormData()[rootFieldName]), // Uses initializeFormData
+                    [subFieldName]: newValue
+                }
             }));
-            if (formErrors[rootFieldName]) {
-                setFormErrors(prev => { const newErrors = { ...prev }; delete newErrors[rootFieldName]; return newErrors; });
+            if (formErrors[rootFieldName]) { // Uses formErrors
+                setFormErrors(prev => { const newErrors = { ...prev }; delete newErrors[rootFieldName]; return newErrors; }); // Uses setFormErrors
             }
             return;
         }
         
-        setFormData(prev => ({ ...prev, [name]: newValue }));
+        setFormData(prev => ({ ...prev, [name]: newValue })); // Uses setFormData
         
-        if (isFormSubmitted && formErrors[name]) {
-            const fieldDef = findFieldInSchema(name); 
+        if (isFormSubmitted && formErrors[name]) { // Uses isFormSubmitted, formErrors
+            const fieldDef = findFieldInSchema(name); // Uses findFieldInSchema
             if (fieldDef) {
                 const tempErrors = {};
-                validateField(fieldDef, newValue, formData, tempErrors); 
+                validateField(fieldDef, newValue, formData, tempErrors); // Uses validateField, formData
                 if (!tempErrors[name]) {
-                    setFormErrors(prev => { const newErrors = { ...prev }; delete newErrors[name]; return newErrors; });
+                    setFormErrors(prev => { const newErrors = { ...prev }; delete newErrors[name]; return newErrors; }); // Uses setFormErrors
                 }
             }
         }
-    }, [findFieldInSchema, formErrors, isFormSubmitted, formData, initializeFormData, validateField]);
-
+    }, [findFieldInSchema, formErrors, isFormSubmitted, formData, initializeFormData, validateField, setFormData, setFormErrors]); // Added missing dependencies to handleChange useCallback
 
     const validateForm = useCallback(() => {
         const newErrors = {};
@@ -213,7 +218,6 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
         return allFieldsValid;
     }, [formData, schema, isFieldVisible, validateField]);
 
-
     const handleSubmitInternal = async (e) => {
         e.preventDefault();
         setIsFormSubmitted(true);
@@ -223,12 +227,13 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
             return;
         }
 
-        if (!validateForm()) { 
+        if (!validateForm()) {
             return;
         }
         
-        const collectedSubmittedFields = [];
-        const allFieldsInSchema = []; // Redefine locally for clear scope
+        const finalSubmissionPayload = {};
+
+        const allFieldsInSchema = [];
         schema.forEach(row => {
             (row.columns || []).forEach(col => {
                 (col.fields || []).forEach(field => {
@@ -237,47 +242,33 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
             });
         });
 
-
         for (const internalFieldName in formData) {
             const fieldDefinition = allFieldsInSchema.find(f => f.name === internalFieldName);
+            
             if (fieldDefinition) {
-                const value = formData[internalFieldName];
-                collectedSubmittedFields.push({
-                    name: fieldDefinition.name,
-                    value: value,
-                    mapping: fieldDefinition.mapping || undefined
-                });
+                const keyName = fieldDefinition.mapping
+                    ? fieldDefinition.mapping.split('.').pop()
+                    : fieldDefinition.name;
+
+                finalSubmissionPayload[keyName] = formData[internalFieldName];
             } else {
-                // For address objects, send the entire object (street, city, etc.) if it's not a simple string
-                if (typeof formData[internalFieldName] === 'object' && formData[internalFieldName] !== null) {
-                    collectedSubmittedFields.push({
-                        name: internalFieldName, // This would be 'address'
-                        value: formData[internalFieldName], // The address object itself
-                        // No mapping here unless it's explicitly part of the schema field definition
-                    });
-                } else {
-                    collectedSubmittedFields.push({
-                        name: internalFieldName,
-                        value: formData[internalFieldName],
-                    });
-                }
+                finalSubmissionPayload[internalFieldName] = formData[internalFieldName];
             }
         }
-        
+
         if (formDefinition.purpose) {
-            collectedSubmittedFields.push({ name: 'purpose', value: formDefinition.purpose });
+            finalSubmissionPayload.purpose = formDefinition.purpose;
         }
         if (associatedLeadId) {
-            collectedSubmittedFields.push({ name: 'associatedLeadId', value: associatedLeadId });
+            finalSubmissionPayload.associatedLeadId = associatedLeadId;
         }
 
         if (onSubmit) {
-            // This is the CRITICAL line: Passing the array wrapped in an object with key 'formData'
-            console.log('FormRenderer: Sending payload to onSubmit:', { formData: collectedSubmittedFields }); // DEBUG
-            await onSubmit({ formData: collectedSubmittedFields });
+            await onSubmit(finalSubmissionPayload);
         }
     };
     
+    // === Moved these definitions here, inside the component, before return statement ===
     const containerStyle = { backgroundColor: globalStyles.backgroundColor };
     const commonInputStyles = {
         borderColor: globalStyles.borderColor,
@@ -294,6 +285,7 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
         borderWidth: `${globalStyles.globalBorderWidth || 1}px`,
         borderStyle: globalStyles.globalBorderStyle || 'solid',
     };
+    // === End of moved definitions ===
 
     if (!schema || schema.length === 0) {
         return <div className="text-gray-600 p-6 text-center">No form schema provided to render.</div>;
@@ -323,7 +315,7 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
 
                                     const currentFieldInputStyles = {
                                         ...commonInputStyles,
-                                        ...field.styles,
+                                        ...(field.styles || {}),
                                     };
                                     const currentFieldLabelStyle = { color: currentFieldInputStyles.labelColor };
 
@@ -345,7 +337,7 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
                                                     onChange={handleChange}
                                                     placeholder={field.placeholder}
                                                     required={field.required}
-                                                    inputStyle={currentFieldInputStyles}
+                                                    style={currentFieldInputStyles} // Changed from inputStyle to style
                                                     labelStyle={currentFieldLabelStyle}
                                                     error={fieldError}
                                                 />
@@ -361,7 +353,7 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
                                                     onChange={handleChange}
                                                     placeholder={field.placeholder}
                                                     required={field.required}
-                                                    inputStyle={currentFieldInputStyles}
+                                                    style={currentFieldInputStyles} // Changed from inputStyle to style
                                                     labelStyle={currentFieldLabelStyle}
                                                     error={fieldError}
                                                 />
@@ -376,7 +368,12 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
                                                     onChange={handleChange}
                                                     options={(field.options || []).map(opt => ({ value: opt, label: opt }))}
                                                     required={field.required}
-                                                    inputStyle={currentFieldInputStyles}
+                                                    borderColor={currentFieldInputStyles.borderColor}
+                                                    borderRadius={currentFieldInputStyles.borderRadius}
+                                                    borderWidth={parseFloat(currentFieldInputStyles.borderWidth)}
+                                                    borderStyle={currentFieldInputStyles.borderStyle}
+                                                    inputTextColor={currentFieldInputStyles.inputTextColor}
+                                                    inputBackgroundColor={currentFieldInputStyles.inputBackgroundColor}
                                                     labelStyle={currentFieldLabelStyle}
                                                     error={fieldError}
                                                 />
@@ -397,7 +394,10 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
                                                                     onChange={handleChange}
                                                                     required={field.required}
                                                                     className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500 mr-2"
-                                                                    style={{color: currentFieldInputStyles.inputTextColor}}
+                                                                    style={{
+                                                                        borderColor: currentFieldInputStyles.borderColor,
+                                                                        backgroundColor: currentFieldInputStyles.inputBackgroundColor,
+                                                                    }}
                                                                 />
                                                                 <label htmlFor={`${field.name}-${option}`} className="text-sm text-gray-700" style={{color: currentFieldInputStyles.inputTextColor}}>
                                                                     {option}
@@ -419,6 +419,10 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
                                                         onChange={handleChange}
                                                         required={field.required}
                                                         className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                                        style={{
+                                                            borderColor: currentFieldInputStyles.borderColor,
+                                                            backgroundColor: currentFieldInputStyles.inputBackgroundColor,
+                                                        }}
                                                     />
                                                     <label htmlFor={field.name} className="ml-2 block text-sm text-gray-900" style={{color: currentFieldInputStyles.inputTextColor}}>
                                                         {field.label}
@@ -454,16 +458,17 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
                                                                             addressComponents.street = (addressComponents.street || '') + ' ' + component.long_name;
                                                                             break;
                                                                         case 'locality':
+                                                                        case 'postal_town': // Added postal_town for better city detection in UK
                                                                             addressComponents.city = component.long_name;
                                                                             break;
                                                                         case 'administrative_area_level_2':
-                                                                            addressComponents.county = component.long_name; // Use county for administrative_area_level_2
+                                                                            addressComponents.county = component.long_name;
                                                                             break;
                                                                         case 'postal_code':
                                                                             addressComponents.postcode = component.long_name;
                                                                             break;
                                                                         case 'country':
-                                                                            addressComponents.country = component.short_name; // Use short_name for country code
+                                                                            addressComponents.country = component.short_name;
                                                                             break;
                                                                         default:
                                                                             break;
@@ -473,6 +478,7 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
                                                                 setFormData(prev => ({
                                                                     ...prev,
                                                                     [field.name]: {
+                                                                        ...(prev[field.name] || initializeFormData()[field.name]),
                                                                         street: (addressComponents.street || '').trim(),
                                                                         city: addressComponents.city || '',
                                                                         county: addressComponents.county || '',
@@ -493,7 +499,7 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
                                                                 onChange={(e) => setFormData(prev => ({ ...prev, [field.name]: { ...prev[field.name], fullAddress: e.target.value } }))}
                                                                 placeholder={field.placeholder || 'Enter address'}
                                                                 required={field.required}
-                                                                inputStyle={currentFieldInputStyles}
+                                                                style={currentFieldInputStyles} // Changed from inputStyle to style
                                                                 error={fieldError}
                                                             />
                                                         </Autocomplete>
@@ -516,6 +522,7 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
                                                         onChange={handleChange}
                                                         required={field.required}
                                                         className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                                        style={currentFieldInputStyles} // Apply styles directly to file input
                                                     />
                                                     {fieldValue && typeof fieldValue === 'object' && fieldValue.name && (
                                                         <p className="text-xs text-gray-500 mt-1">Selected file: {fieldValue.name}</p>
@@ -523,18 +530,18 @@ const FormRenderer = forwardRef(({ formDefinition, onSubmit, isPreview = false, 
                                                     {fieldError && <p className="text-red-500 text-xs mt-1">{fieldError}</p>}
                                                 </div>
                                             );
-                                        default: // Fallback for any unhandled types, though better to list them explicitly
+                                        default:
                                             return (
                                                 <ModernInput
                                                     key={field.id}
                                                     label={field.label}
                                                     name={field.name}
-                                                    type={field.type} // Use field.type directly
+                                                    type={field.type}
                                                     value={fieldValue || ''}
                                                     onChange={handleChange}
                                                     placeholder={field.placeholder}
                                                     required={field.required}
-                                                    inputStyle={currentFieldInputStyles}
+                                                    style={currentFieldInputStyles} // Changed from inputStyle to style
                                                     labelStyle={currentFieldLabelStyle}
                                                     error={fieldError}
                                                 />

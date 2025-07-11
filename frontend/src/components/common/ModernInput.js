@@ -16,7 +16,7 @@ const ModernInput = forwardRef(({
     helpText,
     className,
     autoComplete,
-    labelStyle,
+    labelStyle, // This prop is correctly applied to the label's style attribute
     borderColor,
     inputClassName,
     borderRadius,
@@ -36,7 +36,6 @@ const ModernInput = forwardRef(({
     // For numbers, handle potential null/undefined values
     const inputValue = (type === 'date' || type === 'time') ? (value || '') : (value === null || value === undefined ? '' : value);
 
-
     const defaultInputClasses = `
         mt-1 block w-full px-3 py-2 border rounded-md shadow-sm
         placeholder-gray-400 text-gray-900 focus:outline-none
@@ -45,6 +44,7 @@ const ModernInput = forwardRef(({
         ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}
     `;
 
+    // dynamicInputStyle now correctly creates an object for the native 'style' prop
     const dynamicInputStyle = {
         borderColor: borderColor || undefined,
         borderRadius: borderRadius || undefined,
@@ -66,7 +66,7 @@ const ModernInput = forwardRef(({
         ref: ref,
         autoComplete: autoComplete,
         className: `${inputClassName || defaultInputClasses}`,
-        style: dynamicInputStyle,
+        style: dynamicInputStyle, // Correctly applies the dynamic styles
         min: min,
         max: max,
         step: step,

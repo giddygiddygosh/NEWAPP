@@ -1,3 +1,4 @@
+// src/views/LeadsView.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../utils/api';
 import Loader from '../common/Loader';
@@ -7,12 +8,12 @@ import ModernInput from '../common/ModernInput';
 import ModernSelect from '../common/ModernSelect';
 import { toast } from 'react-toastify';
 import { useMapsApi } from '../../App';
-import { useLocation } from 'react-router-dom';
-import { PlusCircleIcon } from '@heroicons/react/24/outline'; // Ensure PlusCircleIcon is imported if used in header
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const LeadsView = () => {
     const { isMapsLoaded, isMapsLoadError } = useMapsApi();
     const location = useLocation();
+    const navigate = useNavigate();
 
     const [leads, setLeads] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -22,10 +23,12 @@ const LeadsView = () => {
     const [selectedLeadIds, setSelectedLeadIds] = useState([]);
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
     const [actionToConfirm, setActionToConfirm] = useState(null);
-    const [leadToDelete, setLeadToDelete] = useState(null); // Correctly declared here
+    const [leadToDelete, setLeadToDelete] = useState(null);
     const [editingLeadStatusId, setEditingLeadStatusId] = useState(null);
 
-    // Filter states - Initialized based on the current path
+    // === NEW STATE: A trigger for re-fetching ===
+    const [reFetchTrigger, setReFetchTrigger] = useState(0);
+
     const [searchTerm, setSearchTerm] = useState('');
     const [filterSource, setFilterSource] = useState(
         location.pathname === '/quotes' ? 'Website Quote Form' : ''
@@ -34,12 +37,12 @@ const LeadsView = () => {
         location.pathname === '/quotes' ? 'New Quote Request' : ''
     );
     const [currentPage, setCurrentPage] = useState(1);
-    const [leadsPerPage] = useState(10); // Number of leads per page
+    const [leadsPerPage] = useState(10);
 
     const leadStatusOptions = [
-        { value: '', label: 'All Statuses' }, // Option to clear filter
+        { value: '', label: 'All Statuses' },
         { value: 'New', label: 'New' },
-        { value: 'New Quote Request', label: 'New Quote Request' }, // Added for clear filtering
+        { value: 'New Quote Request', label: 'New Quote Request' },
         { value: 'Contacted', label: 'Contacted' },
         { value: 'Qualified', label: 'Qualified' },
         { value: 'Unqualified', label: 'Unqualified' },
@@ -47,16 +50,15 @@ const LeadsView = () => {
     ];
 
     const leadSourceOptions = [
-        { value: '', label: 'All Sources' }, // Option to clear filter
+        { value: '', label: 'All Sources' },
         { value: 'Website', label: 'Website' },
         { value: 'Referral', label: 'Referral' },
         { value: 'Social Media', label: 'Social Media' },
         { value: 'Cold Call', label: 'Cold Call' },
-        { value: 'Website Quote Form', label: 'Website Quote Form' }, // Added for clear filtering
+        { value: 'Website Quote Form', label: 'Website Quote Form' },
         { value: 'Other', label: 'Other' },
     ];
 
-    // Fetch leads based on current filters and pagination
     const fetchLeads = useCallback(async () => {
         setLoading(true);
         setError(null);
@@ -64,28 +66,25 @@ const LeadsView = () => {
             const params = {
                 page: currentPage,
                 limit: leadsPerPage,
-                // Conditionally add filter params if they are not empty strings
-                ...(searchTerm && { searchTerm }), 
-                // Only include filterSource if it's not empty string
-                ...(filterSource && { source: filterSource }), 
-                // Only include filterStatus if it's not empty string
-                ...(filterStatus && { status: filterStatus }), 
+                ...(searchTerm && { searchTerm }),
+                ...(filterSource && { source: filterSource }),
+                ...(filterStatus && { status: filterStatus }),
             };
             const res = await api.get('/leads', { params });
-            setLeads(res.data); // Assuming res.data is an array of leads directly from API response
-            setSelectedLeadIds([]); // Clear selections after fetching new data
+            setLeads(res.data);
+            setSelectedLeadIds([]);
         } catch (err) {
             console.error('Error fetching leads:', err.response?.data || err.message);
             setError(err.response?.data?.message || 'Failed to fetch leads.');
         } finally {
             setLoading(false);
         }
-    }, [currentPage, leadsPerPage, searchTerm, filterSource, filterStatus]); // Dependencies for useCallback
+    }, [currentPage, leadsPerPage, searchTerm, filterSource, filterStatus]);
 
-    // Initial fetch and re-fetch when filters/pagination change
+    // Initial fetch and re-fetch when filters/pagination change, OR reFetchTrigger changes
     useEffect(() => {
         fetchLeads();
-    }, [fetchLeads]);
+    }, [fetchLeads, reFetchTrigger]); // === ADD reFetchTrigger here ===
 
     // Effect to adjust filters based on the current URL path (/leads vs /quotes)
     useEffect(() => {
@@ -93,19 +92,34 @@ const LeadsView = () => {
             setFilterSource('Website Quote Form');
             setFilterStatus('New Quote Request');
         } else {
-            // When on /leads path, reset filters to show all by default
             setFilterSource('');
             setFilterStatus('');
         }
-        setCurrentPage(1); // Always reset to first page whenever path changes
-    }, [location.pathname]); // Dependency on location.pathname
+        setCurrentPage(1);
+        // Do NOT trigger reFetchTrigger here based on path change, as fetchLeads already depends on filters.
+        // This useEffect handles filter changes that themselves drive fetchLeads.
+    }, [location.pathname]);
+
+    // NEW EFFECT: Listen for navigation state from QuoteRequestPage
+    useEffect(() => {
+        if (location.state?.newLeadCreated) {
+            toast.success('New Quote Request has been added!');
+            // === Trigger the re-fetch explicitly ===
+            setReFetchTrigger(prev => prev + 1);
+            
+            // Clear the state to prevent re-fetching if user navigates away and back
+            // and to prevent endless toasts on refresh
+            navigate(location.pathname, { replace: true, state: {} }); 
+        }
+    }, [location.state, navigate, location.pathname]);
 
 
     const handleContactSaved = () => {
         toast.success(`Lead ${selectedLeadForAction ? 'updated' : 'added'} successfully!`);
         setIsAddContactModalOpen(false);
         setSelectedLeadForAction(null);
-        fetchLeads();
+        // === Trigger the re-fetch explicitly for Add/Edit Contact Modal ===
+        setReFetchTrigger(prev => prev + 1);
     };
 
     const handleAddLeadClick = () => {
@@ -119,7 +133,7 @@ const LeadsView = () => {
     };
 
     const handleDeleteClick = (lead) => {
-        setLeadToDelete(lead); // This is the line that caused the error
+        setLeadToDelete(lead);
         setActionToConfirm('delete');
         setIsConfirmationModalOpen(true);
     };
@@ -146,6 +160,7 @@ const LeadsView = () => {
             try {
                 await api.put(`/leads/${leadId}`, { leadStatus: newStatus });
                 toast.success(`Lead status updated to ${newStatus}.`);
+                // Optimistically update the UI without full re-fetch for status change
                 setLeads(prevLeads =>
                     prevLeads.map(lead =>
                         lead._id === leadId ? { ...lead, leadStatus: newStatus } : lead
@@ -196,10 +211,11 @@ const LeadsView = () => {
                 await api.post('/leads/bulk-delete', { ids: selectedLeadIds });
                 toast.success(`${selectedLeadIds.length} leads deleted successfully!`);
             } else if (actionToConfirm === 'convert' && selectedLeadForAction) {
-                 const res = await api.post(`/leads/${selectedLeadForAction._id}/convert-to-customer`);
-                 toast.success(res.data.message);
+                const res = await api.post(`/leads/${selectedLeadForAction._id}/convert-to-customer`);
+                toast.success(res.data.message);
             }
-            fetchLeads();
+            // === Trigger the re-fetch explicitly for all confirmable actions ===
+            setReFetchTrigger(prev => prev + 1);
         } catch (err) {
             console.error(`Error ${actionToConfirm}ing lead(s):`, err);
             setError(err.response?.data?.message || `Failed to ${actionToConfirm} lead(s).`);
@@ -213,7 +229,6 @@ const LeadsView = () => {
         }
     };
 
-    // Helper to get master email/phone from arrays
     const getMasterContact = (contacts, type) => {
         if (!contacts || !Array.isArray(contacts) || contacts.length === 0) return 'N/A';
         const master = contacts.find(c => c.isMaster);
@@ -222,7 +237,6 @@ const LeadsView = () => {
         return type === 'email' ? firstNonEmpty?.email : firstNonEmpty?.number;
     };
 
-    // Helper for status badge styling
     const getStatusClass = (status) => {
         switch (status) {
             case 'New':
@@ -234,8 +248,7 @@ const LeadsView = () => {
             case 'Qualified':
                 return 'bg-green-100 text-green-800';
             case 'Unqualified':
-                return 'bg-red-100 text-red-800';
-            case 'Converted':
+            case 'Converted': // If a converted lead is still in Leads view, style it.
                 return 'bg-teal-100 text-teal-800';
             default:
                 return 'bg-gray-100 text-gray-800';
@@ -271,7 +284,6 @@ const LeadsView = () => {
 
             {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>}
 
-            {/* Filter Section */}
             <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
                 <ModernInput
                     label="Search"
@@ -359,12 +371,12 @@ const LeadsView = () => {
                                                 name="leadStatus"
                                                 value={lead.leadStatus}
                                                 onChange={(e) => handleStatusChange(lead._id, e.target.value)}
-                                                options={leadStatusOptions.filter(o => o.value !== '' && o.value !== 'Converted')} // Exclude 'All Statuses' and 'Converted' from dropdown
+                                                options={leadStatusOptions.filter(o => o.value !== '' && o.value !== 'Converted')}
                                                 disabled={editingLeadStatusId === lead._id || loading}
                                             />
                                             {editingLeadStatusId === lead._id && (
                                                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 animate-spin">
-                                                    <Loader size={16} /> {/* Use your Loader component */}
+                                                    <Loader size={16} />
                                                 </span>
                                             )}
                                         </div>
@@ -412,22 +424,18 @@ const LeadsView = () => {
                 </div>
             )}
 
-            {/* Add/Edit Contact Modal */}
             {isAddContactModalOpen && (
                 <AddContactModal
                     isOpen={isAddContactModalOpen}
                     onClose={() => setIsAddContactModalOpen(false)}
                     onContactAdded={handleContactSaved}
                     initialData={selectedLeadForAction}
-                    // Determine type based on initialData's convertedFromLead status
                     type={selectedLeadForAction?.convertedFromLead ? 'customer' : 'lead'}
                     isMapsLoaded={isMapsLoaded}
                     isMapsLoadError={isMapsLoadError}
-                    // roleOptions is not applicable for type="lead" or "customer"
                 />
             )}
 
-            {/* Confirmation Modal for Delete/Bulk Delete/Convert */}
             {isConfirmationModalOpen && (
                 <ConfirmationModal
                     isOpen={isConfirmationModalOpen}

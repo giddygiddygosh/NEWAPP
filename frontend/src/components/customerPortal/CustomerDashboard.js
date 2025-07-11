@@ -1,143 +1,169 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { Link } from 'react-router-dom';
-import Loader from '../common/Loader';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
+import { useAuth } from '../context/AuthContext'; // Corrected import path
 import api from '../../utils/api';
+import Loader from '../common/Loader';
 
 const CustomerDashboard = () => {
-    const { user, logout, loading: authLoading } = useAuth();
-
     const [recentInvoices, setRecentInvoices] = useState([]);
-    const [upcomingJobs, setUpcomingJobs] = useState([]);
-    const [isLoadingContent, setIsLoadingContent] = useState(true);
-    const [contentError, setContentError] = useState(null);
+    const [upcomingAppointments, setUpcomingAppointments] = useState([]);
+    const [loadingInvoices, setLoadingInvoices] = useState(true);
+    const [loadingAppointments, setLoadingAppointments] = useState(true);
+    const [invoiceError, setInvoiceError] = useState(null);
+    const [appointmentError, setAppointmentError] = useState(null);
 
-    const fetchCustomerDashboardData = useCallback(async () => {
-        if (!user || !user.customer) return;
+    // Get the logout function from your auth context and set up navigation
+    const { logout } = useAuth();
+    const navigate = useNavigate();
 
-        setIsLoadingContent(true);
-        setContentError(null);
-        try {
-            // ================== THIS IS THE FIX ==================
-            // The API paths now correctly start with /api/
-            const invoicesRes = await api.get(`/api/customer-portal/invoices/recent`);
-            setRecentInvoices(invoicesRes.data);
+    // This function handles the entire logout process
+    const handleLogout = () => {
+        logout(); // Clears the user's session
+        toast.info("You have been logged out.");
+        navigate('/login'); // Redirects the user to the login page
+    };
 
-            const jobsRes = await api.get(`/api/customer-portal/jobs/upcoming`);
-            setUpcomingJobs(jobsRes.data);
-            // ======================================================
-
-        } catch (err) {
-            console.error("Failed to fetch customer dashboard data:", err);
-            setContentError("Failed to load your dashboard data.");
-        } finally {
-            setIsLoadingContent(false);
-        }
-    }, [user]);
-
+    // Effect to fetch recent invoices
     useEffect(() => {
-        if (user && user.customer && !authLoading) {
-            fetchCustomerDashboardData();
-        }
-    }, [user, authLoading, fetchCustomerDashboardData]);
+        const fetchRecentInvoices = async () => {
+            setLoadingInvoices(true);
+            setInvoiceError(null);
+            try {
+                const res = await api.get('/customer-portal/invoices/recent');
+                setRecentInvoices(res.data);
+            } catch (err) {
+                console.error("Error fetching recent invoices for dashboard:", err.response?.data || err.message);
+                setInvoiceError("Failed to load recent invoices.");
+            } finally {
+                setLoadingInvoices(false);
+            }
+        };
 
+        fetchRecentInvoices();
+    }, []);
 
-    if (authLoading) {
-        return <div className="flex items-center justify-center min-h-[calc(100vh-80px)]"><Loader /></div>;
-    }
+    // Effect to fetch upcoming appointments (jobs)
+    useEffect(() => {
+        const fetchUpcomingAppointments = async () => {
+            setLoadingAppointments(true);
+            setAppointmentError(null);
+            try {
+                const res = await api.get('/customer-portal/jobs/upcoming');
+                setUpcomingAppointments(res.data);
+            } catch (err) {
+                console.error("Error fetching upcoming appointments for dashboard:", err.response?.data || err.message);
+                setAppointmentError("Failed to load upcoming appointments.");
+            } finally {
+                setLoadingAppointments(false);
+            }
+        };
 
-    if (!user) {
-        return <div className="p-8 text-center text-gray-600">Please log in to access the customer portal.</div>;
-    }
+        fetchUpcomingAppointments();
+    }, []);
 
     return (
-        <div className="p-8 bg-white rounded-lg shadow-xl min-h-[calc(100vh-80px)]">
-            <div className="flex justify-between items-center mb-6 border-b pb-4">
-                <h1 className="text-3xl font-extrabold text-gray-800">Welcome to Your Customer Portal, {user.contactPersonName || user.email}!</h1>
+        <div className="customer-dashboard p-8 bg-gray-50 min-h-screen">
+            <h1 className="text-4xl font-extrabold text-gray-900 mb-6 flex items-center justify-between">
+                Welcome to Your Customer Portal, Yip Yap!
+                {/* The onClick handler is now connected to the logout logic */}
                 <button
-                    onClick={logout}
-                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200 shadow-md"
+                    onClick={handleLogout}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 shadow-md"
                 >
                     Logout
                 </button>
+            </h1>
+            <p className="text-lg text-gray-700 mb-8">This is your personalized dashboard where you can manage your services, requests, and account information.</p>
+
+            {/* Dashboard Cards Section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                {/* View Invoices Card */}
+                <div className="bg-blue-100 p-6 rounded-lg shadow-md border-t-4 border-blue-500">
+                    <h3 className="text-xl font-semibold text-blue-800 mb-2">View Invoices</h3>
+                    <p className="text-blue-700 text-sm mb-4">Access and review all your past and current invoices.</p>
+                    <Link to="/customer-portal/invoices" className="inline-block px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors">
+                        Go to Invoices
+                    </Link>
+                </div>
+
+                {/* Request a Quote Card */}
+                <div className="bg-green-100 p-6 rounded-lg shadow-md border-t-4 border-green-500">
+                    <h3 className="text-xl font-semibold text-green-800 mb-2">Request a Quote</h3>
+                    <p className="text-green-700 text-sm mb-4">Need a new service? Request a personalized quote from our team.</p>
+                    <Link to="/quote-request" className="inline-block px-6 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors">
+                        Request Quote
+                    </Link>
+                </div>
+
+                {/* Manage Appointments Card */}
+                <div className="bg-yellow-100 p-6 rounded-lg shadow-md border-t-4 border-yellow-500">
+                    <h3 className="text-xl font-semibold text-yellow-800 mb-2">Manage Appointments</h3>
+                    <p className="text-yellow-700 text-sm mb-4">View your upcoming appointments or request to reschedule.</p>
+                    <Link to="/customer-portal/appointments" className="inline-block px-6 py-2 bg-yellow-500 text-white font-semibold rounded-lg hover:bg-yellow-600 transition-colors">
+                        View Appointments
+                    </Link>
+                </div>
+
+                {/* Emergency Service Card */}
+                <div className="bg-red-100 p-6 rounded-lg shadow-md border-t-4 border-red-500">
+                    <h3 className="text-xl font-semibold text-red-800 mb-2">Emergency Service</h3>
+                    <p className="text-red-700 text-sm mb-4">For urgent issues, book an emergency appointment quickly.</p>
+                    <Link to="/customer-portal/emergency" className="inline-block px-6 py-2 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 transition-colors">
+                        Book Emergency
+                    </Link>
+                </div>
             </div>
 
-            <p className="text-lg text-gray-600 mb-8">This is your personalized dashboard where you can manage your services, requests, and account information.</p>
-
-            {isLoadingContent ? (
-                <div className="text-center py-10"><Loader /> <p className="text-gray-600 mt-2">Loading your data...</p></div>
-            ) : contentError ? (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm text-center">
-                    {contentError}
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 shadow-sm">
-                        <h3 className="text-xl font-semibold text-blue-800 mb-2">View Invoices</h3>
-                        <p className="text-blue-700">Access and review all your past and current invoices.</p>
-                        <Link to="/customer-portal/invoices" className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Go to Invoices</Link>
+            {/* Your Recent Invoices Section */}
+            <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+                <h3 className="text-2xl font-semibold text-gray-800 mb-4">Your Recent Invoices</h3>
+                {loadingInvoices ? (
+                    <div className="flex items-center text-gray-600">
+                        <Loader size={20} className="mr-2" /> Loading invoices...
                     </div>
+                ) : invoiceError ? (
+                    <div className="text-red-500 text-sm">{invoiceError}</div>
+                ) : recentInvoices.length > 0 ? (
+                    <ul>
+                        {recentInvoices.map(invoice => (
+                            <li key={invoice._id} className="mb-2 text-gray-700">
+                                Invoice **{invoice.invoiceNumber || 'N/A'}**: £{invoice.totalAmount?.toFixed(2) || '0.00'} - Due {new Date(invoice.dueDate).toLocaleDateString()}
+                            </li>
+                        ))}
+                    </ul>
+                ) : (
+                    <p className="text-gray-600">No recent invoices found.</p>
+                )}
+                <Link to="/customer-portal/invoices" className="text-blue-600 hover:underline mt-4 inline-block">
+                    View All Invoices
+                </Link>
+            </div>
 
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-6 shadow-sm">
-                        <h3 className="text-xl font-semibold text-green-800 mb-2">Request a Quote</h3>
-                        <p className="text-green-700">Need a new service? Request a personalized quote from our team.</p>
-                        <Link to="/quote-request" className="mt-4 inline-block px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Request Quote</Link>
+            {/* Your Upcoming Appointments Section */}
+            <div className="bg-white p-6 rounded-lg shadow-md">
+                <h3 className="text-2xl font-semibold text-gray-800 mb-4">Your Upcoming Appointments</h3>
+                {loadingAppointments ? (
+                    <div className="flex items-center text-gray-600">
+                        <Loader size={20} className="mr-2" /> Loading appointments...
                     </div>
-
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 shadow-sm">
-                        <h3 className="text-xl font-semibold text-yellow-800 mb-2">Manage Appointments</h3>
-                        <p className="text-yellow-700">View your upcoming appointments or request to reschedule.</p>
-                        <Link to="/customer-portal/appointments" className="mt-4 inline-block px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700">View Appointments</Link>
-                    </div>
-
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-6 shadow-sm">
-                        <h3 className="text-xl font-semibold text-red-800 mb-2">Emergency Service</h3>
-                        <p className="text-red-700">For urgent issues, book an emergency appointment quickly.</p>
-                        <Link to="/customer-portal/emergency" className="mt-4 inline-block px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Book Emergency</Link>
-                    </div>
-
-                    {recentInvoices.length > 0 ? (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 shadow-sm col-span-full">
-                            <h3 className="text-xl font-semibold text-blue-800 mb-2">Your Recent Invoices</h3>
-                            <ul className="space-y-2">
-                                {recentInvoices.map(invoice => (
-                                    <li key={invoice._id} className="text-blue-700">
-                                        Invoice {invoice.invoiceNumber}: £{invoice.total.toFixed(2)} - {invoice.status} (Due {new Date(invoice.dueDate).toLocaleDateString()})
-                                    </li>
-                                ))}
-                            </ul>
-                            <Link to="/customer-portal/invoices" className="mt-4 inline-block text-blue-600 hover:underline">View All Invoices</Link>
-                        </div>
-                    ) : (
-                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 shadow-sm col-span-full">
-                            <h3 className="text-xl font-semibold text-blue-800 mb-2">Your Recent Invoices</h3>
-                            <p className="text-blue-700">No recent invoices found.</p>
-                            <Link to="/customer-portal/invoices" className="mt-4 inline-block text-blue-600 hover:underline">Go to Invoices Page</Link>
-                        </div>
-                    )}
-
-                    {upcomingJobs.length > 0 ? (
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 shadow-sm col-span-full">
-                            <h3 className="text-xl font-semibold text-yellow-800 mb-2">Your Upcoming Appointments</h3>
-                            <ul className="space-y-2">
-                                {upcomingJobs.map(job => (
-                                    <li key={job._id} className="text-yellow-700">
-                                        {job.serviceType} on {new Date(job.date).toLocaleDateString()} at {job.time} - {job.status}
-                                    </li>
-                                ))}
-                            </ul>
-                            <Link to="/customer-portal/appointments" className="mt-4 inline-block text-yellow-600 hover:underline">View All Appointments</Link>
-                        </div>
-                    ) : (
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 shadow-sm col-span-full">
-                            <h3 className="text-xl font-semibold text-yellow-800 mb-2">Your Upcoming Appointments</h3>
-                            <p className="text-yellow-700">No upcoming appointments found.</p>
-                            <Link to="/customer-portal/appointments" className="mt-4 inline-block text-yellow-600 hover:underline">Go to Appointments Page</Link>
-                        </div>
-                    )}
-
-                </div>
-            )}
+                ) : appointmentError ? (
+                    <div className="text-red-500 text-sm">{appointmentError}</div>
+                ) : upcomingAppointments.length > 0 ? (
+                    <ul>
+                        {upcomingAppointments.map(job => (
+                            <li key={job._id} className="mb-2 text-gray-700">
+                                Job: **{job.jobTitle || 'N/A'}** on {new Date(job.jobDate).toLocaleDateString()} at {job.startTime || 'N/A'}
+                            </li>
+                        ))}
+                    </ul>
+                ) : (
+                    <p className="text-gray-600">No upcoming appointments found.</p>
+                )}
+                <Link to="/customer-portal/appointments" className="text-blue-600 hover:underline mt-4 inline-block">
+                    Go to Appointments Page
+                </Link>
+            </div>
         </div>
     );
 };

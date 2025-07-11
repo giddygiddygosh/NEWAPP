@@ -3,9 +3,9 @@ const router = express.Router();
 const { protect, authorize } = require('../middleware/authMiddleware');
 const asyncHandler = require('express-async-handler');
 const pdf = require('html-pdf');
-const { format, startOfDay, endOfDay } = require('date-fns'); // Added startOfDay, endOfDay
+const { format, startOfDay, endOfDay } = require('date-fns');
 
-// Import controller functions for payroll
+// Import all controller functions for payroll, including the new one
 const {
     calculatePayroll,
     getPayslipById,
@@ -13,6 +13,7 @@ const {
     downloadPayslipsBulk,
     generateAccountantReportData,
     renderAccountantReportHtml,
+    getStaffPayslips, // <--- IMPORTED THE NEW FUNCTION
 } = require('../controllers/payrollController');
 
 // Route to calculate payroll for a given period
@@ -25,6 +26,10 @@ router.get('/payslips/bulk-download', protect, authorize(['admin', 'manager']), 
 
 // MORE SPECIFIC: Route to download a single payslip as PDF
 router.get('/payslips/download/:id', protect, authorize(['admin', 'manager', 'staff']), downloadPayslip);
+
+// NEW SPECIFIC ROUTE: Route to get all payslips for a specific staff member
+// This route is placed before '/payslips/:id' to ensure it's matched correctly.
+router.get('/payslips/staff/:staffId', protect, authorize(['admin', 'manager', 'staff']), getStaffPayslips); // <--- ADDED THIS ROUTE
 
 // NEW: Route to get the aggregated payroll report data and render it as PDF
 router.get('/report/summary', protect, authorize(['admin', 'manager']), asyncHandler(async (req, res) => {

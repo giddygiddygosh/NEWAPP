@@ -4,13 +4,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../../utils/api';
 import Loader from '../common/Loader';
-import { MapPin, Clock, CheckCircle2, XCircle, ChevronRight, Gps, CalendarDays, BriefcaseMedical, LogIn, LogOut } from 'lucide-react'; // Added LogIn, LogOut icons
+import { MapPin, Clock, CheckCircle2, XCircle, ChevronRight, Gps, CalendarDays, BriefcaseMedical, LogIn, LogOut, DollarSign } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { format, isValid } from 'date-fns'; // Added isValid
+import { format, isValid } from 'date-fns';
+import { toast } from 'react-toastify';
 
 import StaffJobCard from './StaffJobCard';
-import StaffAbsenceRequestModal from './StaffAbsenceRequestModal'; 
-import { toast } from 'react-toastify';
+import StaffAbsenceRequestModal from './StaffAbsenceRequestModal';
 
 const StaffDashboard = () => {
     const { user, logout } = useAuth();
@@ -37,6 +37,11 @@ const StaffDashboard = () => {
     });
     const [isLoadingDailyStatus, setIsLoadingDailyStatus] = useState(true);
     const [dailyActionLoading, setDailyActionLoading] = useState(null); // 'clockIn', 'clockOut'
+
+    // NEW STATES FOR PAYSLIPS
+    const [recentPayslips, setRecentPayslips] = useState([]);
+    const [isLoadingPayslips, setIsLoadingPayslips] = useState(true);
+    const [payslipsError, setPayslipsError] = useState(null);
 
 
     const fetchAssignedJobs = useCallback(async () => {
@@ -92,7 +97,7 @@ const StaffDashboard = () => {
         }
     }, [user]);
 
-    // NEW: Fetch current daily clock-in/out status
+    // Fetch current daily clock-in/out status
     const fetchDailyStatus = useCallback(async () => {
         setIsLoadingDailyStatus(true);
         try {
@@ -113,14 +118,36 @@ const StaffDashboard = () => {
         }
     }, [user]);
 
+    // Fetch recent payslips for the staff member
+    const fetchRecentPayslips = useCallback(async () => {
+        setIsLoadingPayslips(true);
+        setPayslipsError(null);
+        try {
+            if (!user?.staff?._id) {
+                setPayslipsError("Staff profile not available. Cannot fetch payslips.");
+                setIsLoadingPayslips(false);
+                return;
+            }
+            // Ensure this endpoint is correctly implemented in your backend payroll routes
+            const res = await api.get(`/payroll/payslips/staff/${user.staff._id}`);
+            setRecentPayslips(res.data);
+        } catch (err) {
+            console.error("Error fetching recent payslips:", err);
+            setPayslipsError(err.response?.data?.message || err.message || "Failed to load recent payslips.");
+        } finally {
+            setIsLoadingPayslips(false);
+        }
+    }, [user]);
+
 
     useEffect(() => {
         if (user?.staff?._id) {
             fetchAssignedJobs();
             fetchMyAbsenceRequests();
-            fetchDailyStatus(); // Call new fetch function
+            fetchDailyStatus();
+            fetchRecentPayslips(); // Call new payslip fetch function
         }
-    }, [user, fetchAssignedJobs, fetchMyAbsenceRequests, fetchDailyStatus]);
+    }, [user, fetchAssignedJobs, fetchMyAbsenceRequests, fetchDailyStatus, fetchRecentPayslips]);
 
 
     const handleJobUpdatedInCard = useCallback((updatedJob) => {
@@ -180,7 +207,7 @@ const StaffDashboard = () => {
         }
     }, [fetchMyAbsenceRequests]);
 
-    // NEW: Clock In/Out Daily Handlers
+    // Clock In/Out Daily Handlers
     const handleClockInDaily = useCallback(async () => {
         setDailyActionLoading('clockIn');
         try {
@@ -234,6 +261,16 @@ const StaffDashboard = () => {
         return isValid(date) ? format(date, 'hh:mm a') : 'Invalid Date';
     };
 
+    // Helper functions for Payslip display
+    const formatDate = (dateString) => {
+        const date = new Date(dateString);
+        return isValid(date) ? format(date, 'dd/MM/yyyy') : 'N/A';
+    };
+    const formatAmount = (amount) => {
+        const num = parseFloat(amount);
+        return isNaN(num) ? '0.00' : num.toFixed(2);
+    };
+
 
     if (!user || user.loading || !user.staff) {
         return (
@@ -267,7 +304,7 @@ const StaffDashboard = () => {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* NEW: Daily Clock-in/out Section */}
+                {/* Daily Clock-in/out Section */}
                 <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 shadow-sm col-span-full">
                     <h3 className="text-xl font-semibold text-purple-800 mb-4 flex items-center gap-2">
                         <Clock size={24} /> Daily Clock-in / Clock-out
@@ -321,6 +358,7 @@ const StaffDashboard = () => {
                     )}
                 </div>
 
+                {/* Your Assigned Jobs (Today/Tomorrow) Section */}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 shadow-sm col-span-full">
                     <h3 className="text-xl font-semibold text-blue-800 mb-4 flex items-center gap-2">
                         <MapPin size={24} /> Your Assigned Jobs (Today/Tomorrow)
@@ -352,6 +390,7 @@ const StaffDashboard = () => {
                     )}
                 </div>
 
+                {/* My Schedule Card */}
                 <div className="bg-green-50 border border-green-200 rounded-lg p-6 shadow-sm">
                     <h3 className="text-xl font-semibold text-green-800 mb-2">My Schedule</h3>
                     <p className="text-green-700">See your upcoming appointments and daily routes.</p>
@@ -363,6 +402,7 @@ const StaffDashboard = () => {
                     </Link>
                 </div>
 
+                {/* Holiday & Leave Card */}
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 shadow-sm">
                     <h3 className="text-xl font-semibold text-yellow-800 mb-2">Holiday & Leave</h3>
                     <p className="text-yellow-700">Request time off or view your holiday allowance.</p>
@@ -374,12 +414,53 @@ const StaffDashboard = () => {
                     </button>
                 </div>
 
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 shadow-sm opacity-60 cursor-not-allowed">
-                    <h3 className="text-xl font-semibold text-purple-800 mb-2">View Pay</h3>
-                    <p className="text-purple-700">Access your payslips and payroll information. (Coming Soon)</p>
-                    <button disabled className="mt-4 px-4 py-2 bg-purple-400 text-white rounded-md">View Payslips</button>
+                {/* NEW/UPDATED: View Pay Section (Payroll Display) */}
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 shadow-sm">
+                    <h3 className="text-xl font-semibold text-purple-800 mb-2 flex items-center gap-2">
+                        <DollarSign size={24} /> Your Recent Pay
+                    </h3>
+                    {isLoadingPayslips ? (
+                        <div className="text-purple-700 text-center flex items-center justify-center">
+                            <Loader className="animate-spin inline-block mr-2" />
+                            <span>Loading payslip history...</span>
+                        </div>
+                    ) : payslipsError ? (
+                        <p className="text-red-600 text-sm">{payslipsError}</p>
+                    ) : recentPayslips.length === 0 ? (
+                        <p className="text-gray-500 text-sm">No recent payslips available yet.</p>
+                    ) : (
+                        <div className="space-y-3 max-h-40 overflow-y-auto custom-scrollbar">
+                            {recentPayslips.map(payslip => (
+                                <div key={payslip._id} className="border border-purple-100 rounded-md p-2 bg-white">
+                                    <p className="text-sm font-semibold text-gray-700">
+                                        Pay Period: {formatDate(payslip.payPeriodStart)} - {formatDate(payslip.payPeriodEnd)}
+                                    </p>
+                                    <p className="text-xs text-gray-600">
+                                        Frequency: {payslip.payFrequency || 'N/A'}
+                                    </p>
+                                    <p className="text-lg text-green-700 font-extrabold mt-1">
+                                        Net Pay: £{formatAmount(payslip.netPay)}
+                                    </p>
+                                    <Link
+                                        to={`/my-payslips?payslipId=${payslip._id}`} // Updated link for staff's own payslips
+                                        className="text-blue-600 hover:underline text-xs inline-block mt-1"
+                                        title="View full payslip details"
+                                    >
+                                        View Details <ChevronRight size={12} className="inline-block ml-0.5" />
+                                    </Link>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    <Link
+                        to="/my-payslips" // Updated link to the new dedicated staff payslips page
+                        className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors shadow-md block text-center text-sm font-medium"
+                    >
+                        Go to My Payslips
+                    </Link>
                 </div>
 
+                {/* Report Sick Day Card */}
                 <div className="bg-red-50 border border-red-200 rounded-lg p-6 shadow-sm">
                     <h3 className="text-xl font-semibold text-red-800 mb-2">Report Sick Day</h3>
                     <p className="text-red-700">Notify management of a sick day.</p>

@@ -64,5 +64,3 @@ const adminManager = authorize('admin', 'manager');
 // --- FIX: LINE 2 ---
 // Export 'adminManager' along with the other functions.
 module.exports = { protect, authorize, adminManager };
-
-

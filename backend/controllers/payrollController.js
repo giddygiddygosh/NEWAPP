@@ -1013,6 +1013,39 @@ const getPayslipById = asyncHandler(async (req, res) => {
     res.status(200).json(payslip);
 });
 
+// **NEW FUNCTION TO FETCH A LIST OF PAYSLIPS FOR A STAFF MEMBER**
+/**
+ * @desc    Get all payslips for a specific staff member
+ * @route   GET /api/payroll/payslips/staff/:staffId
+ * @access  Private (Admin, Manager, Staff - if owner)
+ */
+const getStaffPayslips = asyncHandler(async (req, res) => {
+    const staffId = req.params.staffId;
+    const companyId = req.user.company; // Company ID from the authenticated user
+    const requestingUserRole = req.user.role;
+    const requestingUserStaffId = req.user.staff ? req.user.staff.toString() : null;
+
+    // Authorization: Staff can only view their own payslips
+    // Admins/Managers can view any staff's payslips within their company
+    if (requestingUserRole === 'staff' && staffId !== requestingUserStaffId) {
+        res.status(403);
+        throw new Error('Not authorized to view payslips for this staff member.');
+    }
+
+    try {
+        const payslips = await Payslip.find({ staff: staffId, company: companyId })
+            .sort({ payPeriodEnd: -1 }) // Sort by most recent pay period end date
+            .limit(5) // Limit to, for example, the last 5 payslips for the dashboard summary
+            .populate('staff', 'contactPersonName email') // Populate staff details if needed on frontend
+            .lean(); // Return plain JavaScript objects
+
+        res.status(200).json(payslips);
+    } catch (error) {
+        console.error(`Error fetching payslips for staff ${staffId}:`, error);
+        res.status(500).json({ message: 'Failed to fetch staff payslips.' });
+    }
+});
+
 
 module.exports = {
     calculatePayroll,
@@ -1022,4 +1055,5 @@ module.exports = {
     generateAccountantReportData,
     renderAccountantReportHtml,
     renderPayslipHtml,
+    getStaffPayslips, // <--- EXPORT THIS NEW FUNCTION
 };

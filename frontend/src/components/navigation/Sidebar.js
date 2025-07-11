@@ -1,256 +1,153 @@
 // src/components/navigation/Sidebar.jsx
 
-import React, { useState, useCallback } from 'react';
-import { NavLink, Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-
+import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import {
-    HomeIcon, UserGroupIcon, BriefcaseIcon, DocumentTextIcon,
-    CurrencyDollarIcon, CubeIcon, CogIcon,
-    ChartBarIcon, UsersIcon, MapIcon, CalendarIcon, CreditCardIcon, ArchiveBoxIcon,
-    ChevronDownIcon, ChevronUpIcon, ChevronRightIcon,
-    Bars3Icon, XMarkIcon, ArrowRightOnRectangleIcon,
-    EnvelopeIcon, ClipboardDocumentListIcon, BuildingLibraryIcon,
-    BuildingOffice2Icon, MegaphoneIcon, ShoppingBagIcon,
-    ChatBubbleLeftRightIcon, // <--- ADDED: New icon for chat
+    // --- Heroicons from @heroicons/react/24/outline ---
+    HomeIcon,              // For Dashboard, Staff Dashboard
+    UsersIcon,             // For Customers, Staff
+    FolderIcon,            // For Leads (or other general folders)
+    CalendarIcon,          // For Scheduler
+    DocumentDuplicateIcon, // For Stock (or documents)
+    ChartPieIcon,          // For Form Builder (or charts)
+    Cog6ToothIcon,         // For Settings
+    XMarkIcon,             // For closing sidebar on mobile
+    EnvelopeIcon,          // For Email Templates
+
+    // Specific Heroicons I saw in your earlier App.js or might be useful defaults
+    ClipboardDocumentListIcon, // For a list/reports feel (e.g., Leads, Email Templates)
+    BriefcaseIcon,             // For Staff Absence, or general business items (Heroicons version exists)
+    MapPinIcon,                // For Route Planner
+    CurrencyDollarIcon,        // Heroicons dollar sign - for Invoices/Payroll if preferred over Lucide
+    ShoppingCartIcon,          // Could be for Products/Sales
+    UserGroupIcon,             // Another option for Staff
+    CpuChipIcon,               // Example for a tools icon
+    // Ensure only actual Heroicons are imported from here
 } from '@heroicons/react/24/outline';
 
-import { Mail as MailIconLucide, Search as SearchIconLucide, Route as RouteIconLucide, UserX as UserXIconLucide } from 'lucide-react';
+import {
+    // --- Lucide-React Icons (use only when Heroicons don't fit or are unavailable) ---
+    // DollarSign,       // Using CurrencyDollarIcon from Heroicons above now, but keeping this if you prefer Lucide's aesthetic for money
+    LayoutDashboard,  // Can be a better main dashboard icon than HomeIcon for admin
+    CheckCircle,      // For Spot Checker (Lucide version - Heroicons has CheckCircleIcon)
+    Megaphone,        // For Leads
+    Truck,            // For Route Planner
+    Mail as MailLucide, // Alias if you need MailIcon from Heroicons too
+    ReceiptText,      // For Invoices
+    LineChart,        // For Commission Report
+    Package,          // For Stock
+    UserCog,          // For Staff
+    FolderKanban,     // For Form Builder
+} from 'lucide-react';
 
-const Sidebar = ({ isOpen, toggleSidebar, user, logout, className }) => {
+
+// Helper to determine active link styling
+function classNames(...classes) {
+    return classes.filter(Boolean).join(' ')
+}
+
+const Sidebar = ({ isOpen, toggleSidebar, user, logout }) => {
     const location = useLocation();
-    const [openSubMenu, setOpenSubMenu] = useState(null);
+    const userRole = user?.role;
 
-    const isPathActiveInGroup = useCallback((children) => {
-        return children.some(child => location.pathname.startsWith(child.path));
-    }, [location.pathname]);
+    // Define ALL navigation items with their respective roles
+    // Using Heroicons by default, selectively using Lucide where noted
+    const navigation = [
+        // Dashboards
+        { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'manager'] }, // Using Lucide LayoutDashboard
+        { name: 'Staff Dashboard', href: '/staff-dashboard', icon: HomeIcon, roles: ['staff'] },
+        { name: 'Customer Portal', href: '/customer-portal', icon: UsersIcon, roles: ['customer'] }, // Using Heroicons UsersIcon
+
+        // CRM & People Management
+        { name: 'Customers', href: '/customers', icon: UsersIcon, roles: ['admin', 'manager'] },
+        { name: 'Leads', href: '/leads', icon: Megaphone, roles: ['admin', 'manager', 'staff'] }, // Using Lucide Megaphone
+        { name: 'Staff', href: '/staff', icon: UsersIcon, roles: ['admin', 'manager'] }, // Using Heroicons UsersIcon
+        { name: 'Staff Absence', href: '/staff-absence', icon: BriefcaseIcon, roles: ['admin', 'manager'] }, // Using Heroicons BriefcaseIcon
+
+        // Operations & Scheduling
+        { name: 'Scheduler', href: '/scheduler', icon: CalendarIcon, roles: ['admin', 'manager', 'staff'] },
+        { name: 'Route Planner', href: '/route-planner', icon: MapPinIcon, roles: ['admin', 'manager'] }, // Using Heroicons MapPinIcon for routes
+        { name: 'Spot Checker', href: '/spot-checker', icon: CheckCircle, roles: ['admin', 'manager', 'staff'] }, // Using Lucide CheckCircle
+
+        // Inventory & Invoicing
+        { name: 'Stock', href: '/stock', icon: DocumentDuplicateIcon, roles: ['admin', 'manager', 'staff'] }, // Using Heroicons DocumentDuplicateIcon
+        { name: 'Invoices', href: '/invoices', icon: CurrencyDollarIcon, roles: ['admin', 'manager', 'staff'] }, // Using Heroicons CurrencyDollarIcon
+
+        // Financials (Payroll & Reports)
+        { name: 'Payroll', href: '/payroll', icon: CurrencyDollarIcon, roles: ['admin', 'manager'] }, // Using Heroicons CurrencyDollarIcon
+        { name: 'My Payslips', href: '/my-payslips', icon: CurrencyDollarIcon, roles: ['staff'] }, // Using Heroicons CurrencyDollarIcon
+        { name: 'Commission Report', href: '/commission-report', icon: ChartPieIcon, roles: ['admin', 'manager'] }, // Using Heroicons ChartPieIcon
+
+        // Tools & Automation
+        { name: 'Email Templates', href: '/email-templates', icon: EnvelopeIcon, roles: ['admin'] }, // Using Heroicons EnvelopeIcon
+        { name: 'Form Builder', href: '/form-builder', icon: ChartPieIcon, roles: ['admin'] }, // Using Heroicons ChartPieIcon
+        { name: 'Settings', href: '/settings', icon: Cog6ToothIcon, roles: ['admin'] },
+
+    ].filter(item => item.roles.includes(userRole));
 
 
-    if (user && (user.role === 'customer' || user.role === 'staff' || user.role === 'manager')) {
-        // NOTE: Staff and manager roles previously returned null here.
-        // If you want staff/managers to see *any* sidebar items, you'll need to adjust this condition.
-        // For the admin chat, only 'admin' role is specified, so staff/managers won't see it anyway.
-        // However, if staff dashboard has its own sidebar, this return null will hide this main sidebar for them.
-        // Re-evaluating based on your `showSidebarLayout` in App.js, which already handles this.
-        // So, this `if` block can probably be removed if `showSidebarLayout` is the single source of truth for sidebar display.
-        // For now, keeping it as is to match your original structure.
-        return null;
-    }
-
-    const toggleSubMenu = (name) => {
-        setOpenSubMenu(openSubMenu === name ? null : name);
+    // Determine if the current path is active for the sidebar highlighting
+    const isCurrent = (href) => {
+        if (href === '/dashboard' || href === '/staff-dashboard' || href === '/customer-portal' || href === '/my-payslips') {
+            return location.pathname.startsWith(href);
+        }
+        return location.pathname === href;
     };
 
-    const navItems = [
-        { name: 'Dashboard', path: '/dashboard', icon: HomeIcon, roles: ['admin'], isGroup: false },
-
-        {
-            name: 'CRM',
-            icon: UserGroupIcon,
-            roles: ['admin', 'manager'],
-            isGroup: true,
-            children: [
-                { name: 'Customers', path: '/customers', icon: UsersIcon, roles: ['admin', 'manager'] },
-                { name: 'Leads', path: '/leads', icon: MegaphoneIcon, roles: ['admin', 'manager', 'staff'] },
-            ]
-        },
-
-        { // <--- ADDED: Chat link for admins
-            name: 'Chat',
-            path: '/admin/chat',
-            icon: ChatBubbleLeftRightIcon,
-            roles: ['admin'],
-            isGroup: false
-        },
-
-        {
-            name: 'Management',
-            icon: BriefcaseIcon,
-            roles: ['admin', 'staff', 'manager'],
-            isGroup: true,
-            children: [
-                { name: 'Staff', path: '/staff', icon: UsersIcon, roles: ['admin', 'manager'] },
-                { name: 'Staff Absence', path: '/staff-absence', icon: UserXIconLucide, roles: ['admin', 'manager'] },
-                { name: 'Jobs', path: '/jobs', icon: BriefcaseIcon, roles: ['admin', 'staff', 'manager'] },
-                { name: 'Invoices', path: '/invoices', icon: DocumentTextIcon, roles: ['admin', 'manager', 'staff'] },
-                { name: 'Quotes', path: '/quotes', icon: ClipboardDocumentListIcon, roles: ['admin', 'manager', 'staff'] },
-                { name: 'Stock', path: '/stock', icon: CubeIcon, roles: ['admin', 'manager', 'staff'] },
-                { name: 'Scheduler', path: '/scheduler', icon: CalendarIcon, roles: ['admin', 'staff', 'manager'] },
-                { name: 'Spot Checker', path: '/spot-checker', icon: SearchIconLucide, roles: ['admin', 'staff', 'manager'] },
-                { name: 'Task Checklists', path: '/task-checklists', icon: ClipboardDocumentListIcon, roles: ['admin', 'staff', 'manager'] },
-                { name: 'Payroll', path: '/payroll', icon: CreditCardIcon, roles: ['admin'] },
-            ]
-        },
-
-        {
-            name: 'Tools & Automation',
-            icon: CogIcon,
-            roles: ['admin'],
-            isGroup: true,
-            children: [
-                { name: 'Route Planner', path: '/route-planner', icon: RouteIconLucide, roles: ['admin', 'manager'] },
-                { name: 'Email Templates', path: '/email-templates', icon: MailIconLucide, roles: ['admin'] },
-                { name: 'Form Builder', path: '/form-builder', icon: BuildingLibraryIcon, roles: ['admin'] },
-                { name: 'Settings', path: '/settings', icon: CogIcon, roles: ['admin'] },
-            ]
-        },
-
-        {
-            name: 'Reports',
-            icon: ChartBarIcon,
-            roles: ['admin', 'manager'],
-            isGroup: true,
-            children: [
-                { name: 'Commission Report', path: '/commission-report', icon: ChartBarIcon, roles: ['admin', 'manager'] },
-            ]
-        },
-    ];
-
     return (
-        <>
-            {/* Mobile sidebar overlay */}
-            <div
-                className={`fixed inset-0 bg-gray-900 bg-opacity-75 z-40 md:hidden ${isOpen ? 'block' : 'hidden'}`}
-                onClick={toggleSidebar}
-            ></div>
-
-            {/* Desktop sidebar */}
-            <div
-                className={`
-                    ${className}
-                    fixed inset-y-0 left-0 z-50 bg-gray-800 text-white flex flex-col
-                    transition-all duration-300 ease-in-out
-                    ${isOpen ? 'w-64' : 'w-20'} md:flex md:relative md:shrink-0
-                    overflow-hidden
-                    shadow-xl border-r border-gray-700
-                `}
-            >
-                {/* Sidebar Header/Logo Area */}
-                <div className="flex items-center justify-between h-16 px-4 border-b border-gray-700 flex-shrink-0">
-                    {isOpen ? (
-                        <span className="text-2xl font-bold text-sky-400 flex-shrink-0">ServiceOS</span>
-                    ) : (
-                        <div className="flex items-center justify-center w-full py-2">
-                            <BuildingOffice2Icon className="h-9 w-9 text-sky-400" />
-                        </div>
-                    )}
-                    <button onClick={toggleSidebar} className="md:hidden text-gray-400 hover:text-white focus:outline-none">
-                        <XMarkIcon className="h-6 w-6" />
-                    </button>
-                </div>
-
-                {/* Main Navigation Area */}
-                <nav className="flex-1 px-3 py-4 overflow-y-auto custom-scrollbar"> {/* Increased px-3 */}
-                    <ul className="list-none space-y-1">
-                        {navItems.map((item) => {
-                            const hasAccess = user && item.roles.includes(user.role);
-                            if (!hasAccess) return null;
-
-                            const isActive = item.path ? location.pathname === item.path :
-                                            item.isGroup && isPathActiveInGroup(item.children);
-
-                            if (item.isGroup) {
-                                const isSubMenuOpen = openSubMenu === item.name || isPathActiveInGroup(item.children);
-
-                                return (
-                                    <li key={item.name}>
-                                        <button
-                                            onClick={() => toggleSubMenu(item.name)}
-                                            className={`
-                                                flex items-center py-2 rounded-lg transition-colors duration-200 w-full
-                                                ${isActive ? 'bg-sky-700 text-white shadow-md' : 'hover:bg-gray-700 text-gray-300 hover:text-white'}
-                                                ${isOpen ? 'px-4 justify-between' : 'justify-center'}
-                                            `}
-                                            data-tip={!isOpen ? item.name : ''}
-                                        >
-                                            <span className="flex items-center">
-                                                {item.icon && <item.icon className={`h-6 w-6 ${isOpen ? 'mr-3' : 'mx-auto'}`} />}
-                                                <span className={`text-base font-medium ${isOpen ? 'whitespace-nowrap overflow-hidden text-ellipsis' : 'hidden'}`}>{item.name}</span>
-                                            </span>
-                                            {isOpen && (isSubMenuOpen ? <ChevronUpIcon className="h-5 w-5 ml-2 flex-shrink-0" /> : <ChevronDownIcon className="h-5 w-5 ml-2 flex-shrink-0" />)}
-                                            {!isOpen && !isSubMenuOpen && <ChevronRightIcon className="h-5 w-5 absolute right-2 top-1/2 -translate-y-1/2" />}
-                                            {!isOpen && isSubMenuOpen && <ChevronDownIcon className="h-5 w-5 absolute right-2 top-1/2 -translate-y-1/2 transform rotate-90" />}
-                                        </button>
-
-                                        {isSubMenuOpen && (
-                                            <ul className={`
-                                                list-none space-y-1
-                                                ${isOpen ? 'ml-6 mt-2 relative' : 'absolute left-full top-0 mt-0 bg-gray-700 rounded-lg shadow-lg w-48 py-2 z-50'} {/* Increased ml-6 */}
-                                                transition-all duration-300 ease-in-out
-                                            `}>
-                                                {item.children.map(child => {
-                                                    const childHasAccess = user && child.roles.includes(user.role);
-                                                    if (!childHasAccess) return null;
-
-                                                    return (
-                                                        <li key={child.name}>
-                                                            <NavLink
-                                                                to={child.path}
-                                                                className={({ isActive: isChildActive }) =>
-                                                                    `flex items-center py-2 rounded-lg transition-colors duration-200
-                                                                    ${isChildActive ? 'bg-sky-600 text-white shadow-sm' : 'hover:bg-gray-600 text-gray-400 hover:text-white'}
-                                                                    ${isOpen ? 'px-3' : 'px-4'}`
-                                                                }
-                                                            >
-                                                                {child.icon && <child.icon className={`h-5 w-5 ${isOpen ? 'mr-2' : 'mr-0'}`} />}
-                                                                <span className="text-sm whitespace-nowrap overflow-hidden text-ellipsis">{child.name}</span>
-                                                            </NavLink>
-                                                        </li>
-                                                    );
-                                                })}
-                                            </ul>
-                                        )}
-                                    </li>
-                                );
-                            } else {
-                                return (
-                                    <li key={item.name}>
-                                        <NavLink
-                                            to={item.path}
-                                            className={({ isActive }) =>
-                                                `flex items-center py-2 rounded-lg transition-colors duration-200
-                                                ${isActive ? 'bg-sky-700 text-white shadow-md' : 'hover:bg-gray-700 text-gray-300 hover:text-white'}
-                                                ${isOpen ? 'px-4' : 'justify-center md:tooltip md:tooltip-right'}`
-                                            }
-                                            data-tip={!isOpen ? item.name : ''}
-                                        >
-                                            {item.icon && <item.icon className={`h-6 w-6 ${isOpen ? 'mr-3' : 'mx-auto'}`} />}
-                                            <span className={`text-base font-medium ${isOpen ? 'whitespace-nowrap overflow-hidden text-ellipsis' : 'hidden'}`}>{item.name}</span>
-                                        </NavLink>
-                                    </li>
-                                );
-                            }
-                        })}
-                    </ul>
-                </nav>
-
-                {/* Footer/Logout Section */}
-                <div className={`mt-auto pt-4 border-t border-gray-700 ${isOpen ? 'px-4' : 'px-0'} text-center flex-shrink-0`}> {/* Increased px-4 */}
-                    {isOpen && (
-                        <>
-                            <p className="text-sm text-gray-400 mb-2">Logged in as:</p>
-                            <p className="text-md font-semibold text-white mb-2 truncate">{user.contactPersonName || user.email}</p>
-                            <p className="text-xs text-gray-500 mb-4 uppercase">{user.role}</p>
-                            {user.company?.name && (
-                                <p className="text-xs text-gray-500 mb-4">({user.company.name})</p>
+        <div
+            className={`fixed inset-y-0 left-0 bg-gray-800 text-white
+                       transition-all duration-300 ease-in-out z-20
+                       ${isOpen ? 'w-64' : 'w-20 transform -translate-x-full md:translate-x-0 md:w-20'}`}
+        >
+            <div className="flex items-center justify-between h-16 px-4 border-b border-gray-700">
+                <span className="text-xl font-bold">ServiceOS</span>
+                <button
+                    onClick={toggleSidebar}
+                    className="md:hidden p-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
+                >
+                    <XMarkIcon className="h-6 w-6" />
+                </button>
+            </div>
+            <nav className="flex flex-col flex-1 px-2 py-4 space-y-1">
+                {navigation.map((item) => (
+                    <Link
+                        key={item.name}
+                        to={item.href}
+                        className={classNames(
+                            isCurrent(item.href)
+                                ? 'bg-gray-900 text-white'
+                                : 'text-gray-300 hover:bg-gray-700 hover:text-white',
+                            'group flex items-center px-2 py-2 text-sm font-medium rounded-md'
+                        )}
+                    >
+                        {/* Render icon based on item.icon, which can be from either library */}
+                        <item.icon
+                            className={classNames(
+                                isCurrent(item.href) ? 'text-gray-300' : 'text-gray-400 group-hover:text-gray-300',
+                                'mr-3 flex-shrink-0 h-6 w-6'
                             )}
-                        </>
-                    )}
+                            aria-hidden="true"
+                        />
+                        <span className={`${isOpen ? 'block' : 'hidden md:block'}`}>{item.name}</span>
+                    </Link>
+                ))}
+            </nav>
+
+            <div className="absolute bottom-0 left-0 w-full p-4 border-t border-gray-700 text-gray-400">
+                <div className={`${isOpen ? 'block' : 'hidden md:block'}`}>
+                    <p className="text-xs">Logged in as: <br /><span className="font-semibold text-white">{user?.contactPersonName || user?.email}</span></p>
+                    <p className="text-xs">Role: {userRole}</p>
                     <button
                         onClick={logout}
-                        className={`
-                            w-full flex items-center justify-center py-2 rounded-lg bg-red-600 text-white
-                            hover:bg-red-700 transition-colors duration-200 shadow-md mb-4
-                            ${isOpen ? 'px-4' : 'px-0 md:tooltip md:tooltip-right'}`
-                        }
-                        data-tip={!isOpen ? 'Logout' : ''}
+                        className="mt-2 text-sm text-red-400 hover:text-red-300 flex items-center"
                     >
-                        <ArrowRightOnRectangleIcon className={`h-6 w-6 ${isOpen ? 'mr-3' : 'mx-auto'}`} />
-                        {isOpen && <span className="text-base font-medium">Logout</span>}
+                        <svg className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                        Logout
                     </button>
                 </div>
             </div>
-        </>
+        </div>
     );
 };
 

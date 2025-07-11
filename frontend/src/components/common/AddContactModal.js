@@ -1,3 +1,5 @@
+// src/components/common/AddContactModal.jsx
+
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../utils/api';
 import Loader from '../common/Loader';
@@ -14,7 +16,7 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
             ? (initialData ? 'Edit Customer' : 'Add New Customer')
             : (initialData ? 'Edit Staff Member' : 'Add New Staff Member');
 
-    // === FIX HERE: Initialize formData with a complete default structure ===
+    // Initialize formData with a complete default structure to prevent crashes on initial render
     const [formData, setFormData] = useState({
         companyName: '',
         contactPersonName: '',
@@ -48,7 +50,6 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
         sendQuoteEmail: true,
         appointmentReminderDaysOffset: 0,
     });
-    // === END FIX ===
 
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
@@ -113,13 +114,12 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
     ];
 
     useEffect(() => {
-        // This useEffect now *updates* the formData when isOpen is true or initialData/type changes
-        // It no longer defines the *initial* formData state on every render.
+        // This useEffect updates formData when the modal opens or initialData/type changes.
         if (isOpen) {
             let initialEmails = [{ email: '', label: 'Primary', isMaster: true }];
             let initialPhones = [{ number: '', label: 'Primary', isMaster: true }];
 
-            // Adjust initialEmails and initialPhones based on type and actual data structure
+            // Adapt initialEmails and initialPhones based on type and actual data structure from initialData
             if (initialData) {
                 if (type === 'staff') {
                     // For staff: If email/phone are strings in initialData, convert to array of objects
@@ -127,13 +127,13 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                         ? [{ email: initialData.email, label: 'Primary', isMaster: true }]
                         : (initialData.email && Array.isArray(initialData.email) && initialData.email.length > 0)
                             ? initialData.email
-                            : [{ email: '', label: 'Primary', isMaster: true }]; // Fallback for empty/non-array email
+                            : [{ email: '', label: 'Primary', isMaster: true }];
 
                     initialPhones = (typeof initialData.phone === 'string' && initialData.phone.trim() !== '')
                         ? [{ number: initialData.phone, label: 'Primary', isMaster: true }]
                         : (initialData.phone && Array.isArray(initialData.phone) && initialData.phone.length > 0)
                             ? initialData.phone
-                            : [{ number: '', label: 'Primary', isMaster: true }]; // Fallback for empty/non-array phone
+                            : [{ number: '', label: 'Primary', isMaster: true }];
 
                 } else { // type is 'lead' or 'customer'
                     // For leads/customers, assume email/phone are already arrays of objects
@@ -181,7 +181,7 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                 reviewRequestDaysOffset: initialData?.reviewRequestDaysOffset || 3,
                 sendAppointmentReminderEmail: initialData?.sendAppointmentReminderEmail ?? true,
                 sendQuoteEmail: initialData?.sendQuoteEmail ?? true,
-                appointmentReminderDaysOffset: initialData?.appointmentReminderDaysOffset || 0,
+                appointmentReminderDaysOffset: initialData?.appointmentReminderDaysOffset || 0, 
             }));
             setError(null);
             setSuccessMessage(null);
@@ -342,6 +342,7 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
         setError(null);
         setSuccessMessage(null);
 
+        // Client-side validation:
         if (!formData.contactPersonName || formData.contactPersonName.trim() === '') {
             setError('Contact Person Name is required.');
             setSaving(false);
@@ -366,15 +367,32 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
             let response;
             const dataToSave = { ...formData };
 
-            dataToSave.email = formData.emails.filter(e => e.email.trim() !== '');
-            dataToSave.phone = formData.phones.filter(p => p.number.trim() !== '');
+            // === CRITICAL FIX: Adapt email and phone structure based on 'type' ===
+            if (type === 'staff') {
+                // For staff, extract only the master email and phone number as strings
+                dataToSave.email = masterEmailValue; // Use the extracted master email string
+                const masterPhoneEntry = formData.phones.find(p => p.isMaster);
+                dataToSave.phone = masterPhoneEntry?.number?.trim() || ''; // Extract master phone number string
 
+                // Delete the original 'emails' and 'phones' arrays as the backend Staff model doesn't expect them
+                delete dataToSave.emails;
+                delete dataToSave.phones;
+
+            } else {
+                // For lead/customer, keep them as arrays of objects (after filtering empty ones)
+                dataToSave.email = formData.emails.filter(e => e.email.trim() !== '');
+                dataToSave.phone = formData.phones.filter(p => p.number.trim() !== '');
+            }
+            // === END CRITICAL FIX ===
+
+            // Convert number inputs to actual numbers for submission
             dataToSave.hourlyRate = parseFloat(formData.hourlyRate) || 0;
             dataToSave.jobFixedAmount = parseFloat(formData.jobFixedAmount) || 0;
             dataToSave.jobPercentage = parseFloat(formData.jobPercentage) || 0;
             dataToSave.dailyClockInThresholdMins = parseInt(formData.dailyClockInThresholdMins) || 0;
             dataToSave.commissionEarned = parseFloat(formData.commissionEarned) || 0;
 
+            // Customer email preference number inputs
             dataToSave.invoiceReminderDaysOffset = parseInt(formData.invoiceReminderDaysOffset) || 0;
             dataToSave.reviewRequestDaysOffset = parseInt(formData.reviewRequestDaysOffset) || 0;
             dataToSave.appointmentReminderDaysOffset = parseInt(formData.appointmentReminderDaysOffset) || 0;
@@ -390,13 +408,9 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                 dataToSave.invoicePatternStartDate = null;
             }
 
+            // Type-specific data cleanup before sending to API (delete unnecessary fields)
             if (type === 'staff') {
-                // Ensure to pass the email and phone arrays directly for staff too if backend expects it
-                // If backend expects simple string for staff email/phone, you'd need to adapt here:
-                // dataToSave.email = dataToSave.emails[0]?.email || '';
-                // dataToSave.phone = dataToSave.phones[0]?.number || '';
-                // Since your Lead/Customer models use arrays, assume Staff also uses them for consistency with AddContactModal's email/phone handling
-                
+                // These fields do not exist on the Staff model and should be deleted from payload
                 delete dataToSave.companyName;
                 delete dataToSave.leadSource;
                 delete dataToSave.leadStatus;
@@ -407,6 +421,7 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                 delete dataToSave.industry;
                 delete dataToSave.salesPersonName;
 
+                // Delete customer email preference fields as they don't apply to staff
                 delete dataToSave.sendWelcomeEmail;
                 delete dataToSave.sendInvoiceEmail;
                 delete dataToSave.invoiceEmailTrigger;
@@ -419,6 +434,7 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                 delete dataToSave.appointmentReminderDaysOffset;
                 delete dataToSave.sendQuoteEmail;
 
+                // API call for staff
                 if (initialData) {
                     response = await api.put(`/staff/${initialData._id}`, dataToSave);
                     setSuccessMessage('Staff member updated successfully!');
@@ -427,6 +443,7 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                     setSuccessMessage('Staff member added successfully!');
                 }
             } else if (type === 'customer') {
+                // Delete lead/staff-specific fields
                 delete dataToSave.leadSource;
                 delete dataToSave.leadStatus;
                 delete dataToSave.convertedFromLead;
@@ -438,11 +455,13 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                 delete dataToSave.jobPercentage;
                 delete dataToSave.dailyClockInThresholdMins;
                 
+                // Process service addresses for customers
                 dataToSave.serviceAddresses = formData.serviceAddresses.map(addr => ({
                     ...addr,
                     amount: parseFloat(addr.amount) || 0
                 })).filter(addr => Object.values(addr).some(val => val && val.toString().trim() !== ''));
 
+                // API call for customer
                 if (initialData?._id && !initialData?.convertedFromLead) {
                     response = await api.put(`/customers/${initialData._id}`, dataToSave);
                     setSuccessMessage('Customer updated successfully!');
@@ -451,6 +470,7 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                     setSuccessMessage('Customer added successfully!');
                 }
             } else if (type === 'lead') {
+                // Delete customer/staff-specific fields
                 delete dataToSave.serviceAddresses;
                 delete dataToSave.customerType;
                 delete dataToSave.industry;
@@ -473,6 +493,7 @@ const AddContactModal = ({ isOpen, onClose, onContactAdded, initialData, isMapsL
                 delete dataToSave.appointmentReminderDaysOffset;
                 delete dataToSave.sendQuoteEmail;
 
+                // API call for lead
                 if (initialData) {
                     response = await api.put(`/leads/${initialData._id}`, dataToSave);
                     setSuccessMessage('Lead updated successfully!');

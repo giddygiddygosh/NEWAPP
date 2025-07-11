@@ -1,5 +1,3 @@
-// backend/controllers/jobController.js
-
 const asyncHandler = require('express-async-handler');
 const Job = require('../models/Job');
 const Customer = require('../models/Customer');
@@ -11,15 +9,39 @@ const path = require('path');
 const fs = require('fs');
 const Form = require('../models/Form');
 const Invoice = require('../models/Invoice');
-// --- NEW: Import the invoice service ---
 const { generateAndProcessInvoiceForJob } = require('../services/invoiceService');
+
+// ================== THIS IS THE CORRECTED FUNCTION ==================
+const extractTasksFromFormSchema = (formSchema) => {
+    const tasks = [];
+    if (!formSchema || !Array.isArray(formSchema)) {
+        return tasks;
+    }
+
+    formSchema.forEach(row => {
+        (row.columns || []).forEach(col => {
+            (col.fields || []).forEach(field => {
+                if (field.mapping && field.mapping.startsWith('task_item')) {
+                    const description = field.label || 'Unnamed Task';
+                    tasks.push({
+                        taskId: new mongoose.Types.ObjectId(), // Generate a new unique ID for each task
+                        description: description,
+                        completed: false
+                    });
+                }
+            });
+        });
+    });
+    
+    const uniqueTasks = Array.from(new Map(tasks.map(task => [task.description, task])).values());
+    return uniqueTasks;
+};
+// =====================================================================
 
 const uploadsDir = path.join(__dirname, '../../uploads');
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
-
-// --- (All functions before returnJobStock remain the same) ---
 
 const getJobs = asyncHandler(async (req, res) => {
     const companyId = req.user.company._id;
@@ -63,7 +85,7 @@ const createJob = asyncHandler(async (req, res) => {
         let jobTasks = [];
         if (formTemplate) {
             const form = await Form.findById(formTemplate).session(session);
-            if (form) jobTasks = extractTasksFromFormSchema(form.schema);
+            if (form) jobTasks = extractTasksFromFormSchema(form.formSchema);
         }
         
         const formattedUsedStock = (usedStockItems || []).map(item => ({
@@ -244,8 +266,6 @@ const uploadJobPhoto = asyncHandler(async (req, res) => {
     res.status(501).json({ message: 'Not Implemented' });
 });
 
-
-// --- THIS IS THE UPDATED FUNCTION ---
 const returnJobStock = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { returnedStockItems, newStatus } = req.body;
@@ -302,18 +322,13 @@ const returnJobStock = asyncHandler(async (req, res) => {
         session.endSession();
     }
 
-    // --- AUTOMATION TRIGGER ---
-    // After the transaction is successful, trigger invoice generation in the background.
     if (newStatus === 'Completed') {
         console.log(`[Job Complete] Triggering background invoice processing for job ${id}.`);
-        // We do NOT 'await' this, so the user gets an immediate response.
         generateAndProcessInvoiceForJob(id, req.user).catch(err => {
-            // Log any errors from the background process.
             console.error(`[BACKGROUND_INVOICE_ERROR] Failed to auto-generate invoice for job ${id}:`, err.message);
         });
     }
 
-    // Respond to the user immediately.
     res.status(200).json({
         message: `Job marked as ${newStatus} and stock updated!`,
         job: populatedJobForResponse

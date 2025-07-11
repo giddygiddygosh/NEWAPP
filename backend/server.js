@@ -4,9 +4,11 @@ const connectDB = require('./config/db');
 const cors = require('cors');
 const admin = require('firebase-admin');
 const path = require('path');
+const morgan = require('morgan'); // Added: Morgan for request logging
 
 dotenv.config();
 
+// Firebase Admin SDK Initialization
 try {
     const serviceAccount = require('./config/serviceAccountKey.json');
     admin.initializeApp({
@@ -18,14 +20,14 @@ try {
     process.exit(1);
 }
 
+// Connect to Database
 connectDB();
 
 const app = express();
 
-app.use((req, res, next) => {
-    console.log(`GLOBAL REQUEST DEBUG: Method: ${req.method}, Path: ${req.originalUrl}, Time: ${new Date().toISOString()}`);
-    next();
-});
+// Middleware
+// Using Morgan for concise request logging (replaces custom global request debug)
+app.use(morgan('dev'));
 
 app.use(cors({
     origin: '*', // Adjust this for production to be more specific
@@ -35,6 +37,9 @@ app.use(cors({
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Make the 'uploads' folder static
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Import Routes
 const authRoutes = require('./routes/authRoutes');
@@ -53,10 +58,10 @@ const invoiceRoutes = require('./routes/invoiceRoutes');
 const dailyTimeRoutes = require('./routes/dailyTimeRoutes');
 const payrollRoutes = require('./routes/payrollRoutes');
 const customerPortalRoutes = require('./routes/customerPortalRoutes');
-const mailRoutes = require('./routes/mailRoutes'); // <<< 1. ADD THIS LINE
-
-// Make the 'uploads' folder static
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+const mailRoutes = require('./routes/mailRoutes');
+const routePlannerRoutes = require('./routes/routePlannerRoutes');
+const commissionReportRoutes = require('./routes/commissionReportRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes'); // <--- ADDED: Dashboard Routes
 
 // Use Routes
 app.use('/api/auth', authRoutes);
@@ -75,8 +80,12 @@ app.use('/api/daily-time', dailyTimeRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/customer-portal', customerPortalRoutes);
-app.use('/api/mail', mailRoutes); // <<< 2. ADD THIS LINE
+app.use('/api/mail', mailRoutes);
+app.use('/api/routes', routePlannerRoutes);
+app.use('/api/reports', commissionReportRoutes);
+app.use('/api/dashboard', dashboardRoutes); // <--- ADDED: Use Dashboard Routes
 
+// Home route
 app.get('/', (req, res) => {
     res.send('API is running...');
 });
@@ -102,7 +111,7 @@ const errorHandler = (err, req, res, next) => {
 app.use(notFound);
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5004;
+const PORT = process.env.PORT || 5004; // Port remains 5004
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

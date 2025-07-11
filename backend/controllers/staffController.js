@@ -1,8 +1,8 @@
-// backend/controllers/staffController.js
-
 const Staff = require('../models/Staff');
-const User = require('../models/User'); // Corrected import
+const User = require('../models/User');
 const Company = require('../models/Company');
+const Job = require('../models/Job'); // Added for getStaffStats
+const TimeLog = require('../models/TimeLog'); // Added for getStaffStats
 const asyncHandler = require('express-async-handler');
 const mongoose = require('mongoose');
 const admin = require('firebase-admin');
@@ -237,12 +237,11 @@ const deleteStaff = asyncHandler(async (req, res) => {
  */
 const addStaffAbsence = asyncHandler(async (req, res) => {
     const { staffId } = req.params;
-    const { start, end, type, reason, status = 'Pending' } = req.body; 
+    const { start, end, type, reason, status = 'Pending' } = req.body;    
     const requestingUserRole = req.user.role;
     const requestingUserStaffId = req.user.staff ? req.user.staff.toString() : null;
 
     try {
-        // --- FIX: Ensure unavailabilityPeriods is selected when fetching staff ---
         const staff = await Staff.findById(staffId).select('+unavailabilityPeriods');
 
         if (!staff || staff.company.toString() !== req.user.company.toString()) {
@@ -262,7 +261,6 @@ const addStaffAbsence = asyncHandler(async (req, res) => {
 
         const newAbsence = { start, end, type, reason, status };
 
-        // This check is good, but won't be hit if .select('+unavailabilityPeriods') is used
         if (!staff.unavailabilityPeriods) {
             staff.unavailabilityPeriods = [];
         }
@@ -305,25 +303,24 @@ const getStaffAbsences = asyncHandler(async (req, res) => {
             return res.status(404).json({ message: 'Staff member not found or not authorized for your company.' });
         }
 
-        // --- FIX: Explicitly select unavailabilityPeriods here ---
         const staffDoc = await Staff.findById(staffId).select('+unavailabilityPeriods');
-        if (!staffDoc) { // Re-check if staffDoc is null after re-fetching with select
+        if (!staffDoc) {
             return res.status(404).json({ message: 'Staff member not found after selecting periods.' });
         }
 
-        let filteredPeriods = staffDoc.unavailabilityPeriods || []; // Ensure it's an array for filtering
+        let filteredPeriods = staffDoc.unavailabilityPeriods || [];
 
         // Get optional filters from query
         const { startDate, endDate, type, status } = req.query;
         
         if (startDate) {
             const startOfDay = new Date(startDate);
-            startOfDay.setUTCHours(0, 0, 0, 0); // Start of the day in UTC
+            startOfDay.setUTCHours(0, 0, 0, 0);
             filteredPeriods = filteredPeriods.filter(p => new Date(p.end) >= startOfDay);
         }
         if (endDate) {
             const endOfDay = new Date(endDate);
-            endOfDay.setUTCHours(23, 59, 59, 999); // End of the day in UTC
+            endOfDay.setUTCHours(23, 59, 59, 999);
             filteredPeriods = filteredPeriods.filter(p => new Date(p.start) <= endOfDay);
         }
         if (type) {
@@ -333,10 +330,9 @@ const getStaffAbsences = asyncHandler(async (req, res) => {
             filteredPeriods = filteredPeriods.filter(p => p.status === status);
         }
 
-        // Sort them (optional, but good for display)
         filteredPeriods.sort((a, b) => new Date(a.start) - new Date(b.start));
 
-        res.status(200).json(filteredPeriods); // Return only the filtered periods
+        res.status(200).json(filteredPeriods);
 
     } catch (error) {
         console.error('Error fetching staff absences:', error);
@@ -351,13 +347,11 @@ const getStaffAbsences = asyncHandler(async (req, res) => {
  */
 const updateStaffAbsence = asyncHandler(async (req, res) => {
     const { staffId, absenceId } = req.params;
-    // Add resolutionReason to destructuring
-    const { start, end, type, reason, status, resolutionReason } = req.body; 
+    const { start, end, type, reason, status, resolutionReason } = req.body;    
     const requestingUserRole = req.user.role;
     const requestingUserStaffId = req.user.staff ? req.user.staff.toString() : null;
 
     try {
-        // --- FIX: Ensure unavailabilityPeriods is selected when fetching staff ---
         const staff = await Staff.findById(staffId).select('+unavailabilityPeriods');
 
         if (!staff || staff.company.toString() !== req.user.company.toString()) {
@@ -365,7 +359,6 @@ const updateStaffAbsence = asyncHandler(async (req, res) => {
             throw new Error('Staff member not found or not authorized for this company.');
         }
 
-        // Ensure unavailabilityPeriods is an array before trying to findIndex
         if (!staff.unavailabilityPeriods) {
             staff.unavailabilityPeriods = [];
         }
@@ -381,45 +374,39 @@ const updateStaffAbsence = asyncHandler(async (req, res) => {
 
         const existingAbsence = staff.unavailabilityPeriods[absenceIndex];
 
-        // Authorization check for staff:
         if (requestingUserRole === 'staff' && staffId !== requestingUserStaffId) {
             res.status(403);
             throw new Error('Not authorized to update this absence period.');
         }
         
-        // If the requesting user is 'staff' and they are trying to change the status, deny it.
-        // Admins/Managers can change status.
         if (requestingUserRole === 'staff' && status !== undefined && status !== existingAbsence.status) {
             res.status(403);
             throw new Error('Staff are not authorized to change the status of an absence period.');
         }
 
-        // Apply updates
         if (start !== undefined) existingAbsence.start = start;
         if (end !== undefined) existingAbsence.end = end;
         if (type !== undefined) existingAbsence.type = type;
         if (reason !== undefined) existingAbsence.reason = reason;
         
-        // Only Admin or Manager can update status and resolutionReason
         if (['admin', 'manager'].includes(requestingUserRole)) {
             if (status !== undefined) {
                 existingAbsence.status = status;
             }
-            if (resolutionReason !== undefined) { // Apply resolutionReason if provided by admin/manager
+            if (resolutionReason !== undefined) {
                 existingAbsence.resolutionReason = resolutionReason;
             }
         }
 
-        // Basic date validation after applying updates (only if dates are updated)
         if (start !== undefined || end !== undefined) {
-             if (new Date(existingAbsence.start) >= new Date(existingAbsence.end)) {
+            if (new Date(existingAbsence.start) >= new Date(existingAbsence.end)) {
                 res.status(400);
                 throw new Error('End date must be after start date.');
             }
         }
 
         await staff.save();
-        res.status(200).json(staff.unavailabilityPeriods); // Return the updated list
+        res.status(200).json(staff.unavailabilityPeriods);
 
     } catch (error) {
         console.error('Error updating staff absence:', error);
@@ -442,7 +429,6 @@ const deleteStaffAbsence = asyncHandler(async (req, res) => {
     const requestingUserStaffId = req.user.staff ? req.user.staff.toString() : null;
 
     try {
-        // --- FIX: Ensure unavailabilityPeriods is selected when fetching staff ---
         const staff = await Staff.findById(staffId).select('+unavailabilityPeriods');
 
         if (!staff || staff.company.toString() !== req.user.company.toString()) {
@@ -455,12 +441,11 @@ const deleteStaffAbsence = asyncHandler(async (req, res) => {
             throw new Error('Not authorized to delete this absence period.');
         }
 
-        // Ensure unavailabilityPeriods is an array before trying to filter
         if (!staff.unavailabilityPeriods) {
             staff.unavailabilityPeriods = [];
         }
 
-        staff.unavailabilityPeriods = staff.unavailabilityPeriods.filter( // This is line 452 if current staffController.js is used
+        staff.unavailabilityPeriods = staff.unavailabilityPeriods.filter(
             (p) => p._id && p._id.toString() !== absenceId
         );
 
@@ -471,6 +456,70 @@ const deleteStaffAbsence = asyncHandler(async (req, res) => {
         console.error('Error deleting staff absence:', error);
         res.status(500).json({ message: 'Server error: Could not delete absence.', error: error.message });
     }
+});
+
+/**
+ * @desc Get staff statistics
+ * @route GET /api/staff/:id/stats
+ * @access Private (Admin, Manager, Staff - self)
+ */
+const getStaffStats = asyncHandler(async (req, res) => {
+    const staffId = req.params.id;
+    const companyId = req.user.company;
+    const requestingUserRole = req.user.role;
+    const requestingUserStaffId = req.user.staff ? req.user.staff.toString() : null;
+
+    // Authorization check: Staff can only view their own stats
+    if (requestingUserRole === 'staff' && staffId !== requestingUserStaffId) {
+        return res.status(403).json({ message: 'Not authorized to view stats for this staff member.' });
+    }
+
+    const staffMember = await Staff.findOne({ _id: staffId, company: companyId }).select('+unavailabilityPeriods');
+
+    if (!staffMember) {
+        return res.status(404).json({ message: 'Staff member not found or not authorized.' });
+    }
+
+    // 1. Total Jobs Completed
+    const totalJobsCompleted = await Job.countDocuments({
+        assignedStaff: staffId,
+        company: companyId,
+        status: 'Completed' // Assuming 'Completed' status
+    });
+
+    // 2. Total Commission Earned (assuming commission is tracked on the staff model directly)
+    // If commission is accumulated per job or through payroll, this logic would need to change.
+    const totalCommissionEarned = staffMember.commissionEarned || 0; // Adjust based on your schema
+
+    // 3. Total Hours Logged (assuming a TimeLog model where staffMember refers to staffId)
+    const totalHoursLoggedResult = await TimeLog.aggregate([
+        {
+            $match: {
+                staffMember: new mongoose.Types.ObjectId(staffId),
+                company: new mongoose.Types.ObjectId(companyId),
+                // Add date range if needed, e.g., { date: { $gte: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000) } } for last 6 months
+            }
+        },
+        {
+            $group: {
+                _id: null,
+                totalDurationMinutes: { $sum: '$durationMinutes' } // Assuming duration is stored in minutes
+            }
+        }
+    ]);
+    const totalHoursLogged = totalHoursLoggedResult.length > 0 ? (totalHoursLoggedResult[0].totalDurationMinutes / 60) : 0; // Convert minutes to hours
+
+    // 4. Pending Absences Count
+    const pendingAbsencesCount = (staffMember.unavailabilityPeriods || []).filter(
+        period => period.status === 'Pending' && new Date(period.end) >= new Date() // Only count future pending absences
+    ).length;
+
+    res.status(200).json({
+        totalJobsCompleted,
+        totalCommissionEarned,
+        totalHoursLogged,
+        pendingAbsencesCount,
+    });
 });
 
 /**
@@ -509,6 +558,7 @@ module.exports = {
     addStaffAbsence,
     updateStaffAbsence,
     deleteStaffAbsence,
-    getStaffAbsences, 
+    getStaffAbsences,    
     sendRouteToStaff,
+    getStaffStats,
 };

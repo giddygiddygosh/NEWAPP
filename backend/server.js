@@ -43,7 +43,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Import Routes
 const authRoutes = require('./routes/authRoutes');
-const customerRoutes = require('./routes/customerRoutes');
+const customerRoutes = require('./routes/customerRoutes'); // <-- Corrected line here!
 const leadRoutes = require('./routes/leadRoutes');
 const formRoutes = require('./routes/formRoutes');
 const publicRoutes = require('./routes/publicRoutes');
@@ -53,7 +53,6 @@ const staffRoutes = require('./routes/staffRoutes');
 const jobRoutes = require('./routes/jobRoutes');
 const stockRoutes = require('./routes/stockRoutes');
 const emailTemplateRoutes = require('./routes/emailTemplateRoutes');
-const absenceRoutes = require('./routes/absenceRoutes');
 const invoiceRoutes = require('./routes/invoiceRoutes');
 const dailyTimeRoutes = require('./routes/dailyTimeRoutes');
 const payrollRoutes = require('./routes/payrollRoutes');
@@ -61,7 +60,7 @@ const customerPortalRoutes = require('./routes/customerPortalRoutes');
 const mailRoutes = require('./routes/mailRoutes');
 const routePlannerRoutes = require('./routes/routePlannerRoutes');
 const commissionReportRoutes = require('./routes/commissionReportRoutes');
-const dashboardRoutes = require('./routes/dashboardRoutes'); // <--- ADDED: Dashboard Routes
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 // Use Routes
 app.use('/api/auth', authRoutes);
@@ -75,7 +74,6 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/stock', stockRoutes);
 app.use('/api/email-templates', emailTemplateRoutes);
 app.use('/api/invoices', invoiceRoutes);
-app.use('/api/absences', absenceRoutes);
 app.use('/api/daily-time', dailyTimeRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/public', publicRoutes);
@@ -83,7 +81,7 @@ app.use('/api/customer-portal', customerPortalRoutes);
 app.use('/api/mail', mailRoutes);
 app.use('/api/routes', routePlannerRoutes);
 app.use('/api/reports', commissionReportRoutes);
-app.use('/api/dashboard', dashboardRoutes); // <--- ADDED: Use Dashboard Routes
+app.use('/api/dashboard', dashboardRoutes);
 
 // Home route
 app.get('/', (req, res) => {
@@ -111,7 +109,7 @@ const errorHandler = (err, req, res, next) => {
 app.use(notFound);
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5004; // Port remains 5004
+const PORT = process.env.PORT || 5004;
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

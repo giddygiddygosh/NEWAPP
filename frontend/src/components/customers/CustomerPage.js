@@ -1,12 +1,13 @@
 // src/components/customers/CustomerPage.jsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react'; // Import useRef
 import api from '../../utils/api';
 import Loader from '../common/Loader';
 import ConfirmationModal from '../common/ConfirmationModal';
 import AddContactModal from '../common/AddContactModal';
-import BulkUploader from '../common/BulkUploader'; // NEW: Import BulkUploader
+import BulkUploader from '../common/BulkUploader';
 import { useMapsApi } from '../../App';
+import CustomerProfileModal from './CustomerProfileModal';
 
 const CustomerPage = () => {
     const [customers, setCustomers] = useState([]);
@@ -14,18 +15,21 @@ const CustomerPage = () => {
     const [error, setError] = useState(null);
     const [isAddCustomerModalOpen, setIsAddCustomerModalOpen] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
+    const [customerToDeleteId, setCustomerToDeleteId] = useState(null);
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
-    const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false); // NEW: State for bulk upload modal
+    const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false);
+
+    const [isCustomerProfileModalOpen, setIsCustomerProfileModalOpen] = useState(false);
+    const [customerToViewId, setCustomerToViewId] = useState(null);
 
     const { isMapsLoaded, isMapsLoadError } = useMapsApi();
 
-    // NEW: Define fields for Customer Bulk Upload (for instructions and internal mapping)
     const customerUploadFields = [
         { header: 'Contact Person Name', key: 'contactPersonName' },
         { header: 'Email Address', key: 'email' },
         { header: 'Phone Number', key: 'phone' },
         { header: 'Company Name', key: 'companyName' },
-        { header: 'Street', key: 'address.street' }, // Detailed address fields
+        { header: 'Street', key: 'address.street' },
         { header: 'City', key: 'address.city' },
         { header: 'County', key: 'address.county' },
         { header: 'Postcode', key: 'address.postcode' },
@@ -68,12 +72,29 @@ const CustomerPage = () => {
         setIsAddCustomerModalOpen(true);
     };
 
-    const handleDeleteCustomerClick = async (customerId) => {
-        if (window.confirm('Are you sure you want to delete this customer? This will also delete their associated portal login if one exists.')) {
+    const handleViewCustomerProfileClick = (customerId) => {
+        setCustomerToViewId(customerId);
+        setIsCustomerProfileModalOpen(true);
+    };
+
+    const handleOpenEditFromProfileModal = (customerData) => {
+        setIsCustomerProfileModalOpen(false); // Close profile modal
+        handleEditCustomerClick(customerData); // Open edit modal with customer data
+    };
+
+    const handleDeleteCustomerClick = (customerId) => {
+        setCustomerToDeleteId(customerId);
+        setIsConfirmationModalOpen(true);
+    };
+
+    const confirmDeleteCustomer = async () => {
+        if (customerToDeleteId) {
             setLoading(true);
             try {
-                await api.delete(`/customers/${customerId}`);
+                await api.delete(`/customers/${customerToDeleteId}`);
                 fetchCustomers();
+                setCustomerToDeleteId(null);
+                setIsConfirmationModalOpen(false);
             } catch (err) {
                 console.error('Error deleting customer:', err);
                 setError(err.response?.data?.message || 'Failed to delete customer.');
@@ -83,9 +104,10 @@ const CustomerPage = () => {
         }
     };
 
-    const handleBulkUploadSuccess = () => { // NEW: Handler for successful bulk upload
-        fetchCustomers(); // Refresh the customer list
-        setIsBulkUploadModalOpen(false); // Close the bulk upload modal
+
+    const handleBulkUploadSuccess = () => {
+        fetchCustomers();
+        setIsBulkUploadModalOpen(false);
     };
 
     const getMasterContact = (contacts, type) => {
@@ -99,13 +121,109 @@ const CustomerPage = () => {
         return 'N/A';
     };
 
+    // NEW: ActionDropdown component (now with its own state and click-outside logic)
+    const ActionDropdown = ({ customer }) => {
+        const [isOpen, setIsOpen] = useState(false);
+        const dropdownRef = useRef(null); // Ref for click-outside detection
+
+        // Effect for handling clicks outside the dropdown
+        useEffect(() => {
+            function handleClickOutside(event) {
+                if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                    setIsOpen(false); // Close dropdown if click is outside
+                }
+            }
+            // Attach the event listener when the dropdown is open
+            if (isOpen) {
+                document.addEventListener("mousedown", handleClickOutside);
+            }
+            return () => {
+                // Clean up the event listener when the component unmounts or dropdown closes
+                document.removeEventListener("mousedown", handleClickOutside);
+            };
+        }, [isOpen]); // Re-run effect when isOpen changes
+
+        const toggleDropdown = () => setIsOpen(!isOpen);
+
+        // Define a wrapper for action clicks that also closes the dropdown
+        const handleActionClick = (actionFn) => (e) => {
+            e.stopPropagation(); // Stop event from bubbling up and potentially interfering
+            actionFn(); // Execute the action function
+            setIsOpen(false); // Close dropdown after action
+        };
+
+        return (
+            <div className="relative inline-block text-left" ref={dropdownRef}>
+                <button
+                    type="button"
+                    onClick={toggleDropdown} // Toggle dropdown visibility
+                    className="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    id={`actions-menu-${customer._id}`} // Unique ID
+                    aria-haspopup="true"
+                    aria-expanded={isOpen} // Indicate expanded state for accessibility
+                >
+                    Actions
+                    <svg className="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                </button>
+
+                {/* Conditionally render dropdown content */}
+                {isOpen && (
+                    <div
+                        className="origin-top-right absolute right-0 mt-2 w-40 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10" // Added z-10 to ensure it's on top
+                        role="menu"
+                        aria-orientation="vertical"
+                        aria-labelledby={`actions-menu-${customer._id}`}
+                    >
+                        <div className="py-1" role="none">
+                            <button
+                                onClick={handleActionClick(() => handleViewCustomerProfileClick(customer._id))}
+                                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                                role="menuitem"
+                            >
+                                View Profile
+                            </button>
+                            <button
+                                onClick={handleActionClick(() => handleEditCustomerClick(customer))}
+                                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                                role="menuitem"
+                            >
+                                Edit
+                            </button>
+                            <button
+                                onClick={handleActionClick(() => handleDeleteCustomerClick(customer._id))}
+                                className="block w-full text-left px-4 py-2 text-sm text-red-700 hover:bg-red-100 hover:text-red-900"
+                                role="menuitem"
+                            >
+                                Delete
+                            </button>
+                            {/* Add more actions here if needed, e.g., Create Job, View Invoices */}
+                            {/* Example for Create Job - assuming handleCreateJobForCustomer takes customerId */}
+                            {/*
+                            <button
+                                onClick={handleActionClick(() => window.location.href = `/jobs/new?customer=${customer._id}`)}
+                                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                                role="menuitem"
+                            >
+                                Create Job
+                            </button>
+                            */}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+
     return (
-        <div className="p-8 bg-white rounded-lg shadow-xl">
+        <div className="p-8 bg-white rounded-lg shadow-xl min-h-[calc(100vh-80px)]">
             <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-200">
                 <h2 className="text-3xl font-extrabold text-gray-800">Customer Management</h2>
-                <div className="flex space-x-3"> {/* NEW: Container for multiple buttons */}
+                <div className="flex space-x-3">
                     <button
-                        onClick={() => setIsBulkUploadModalOpen(true)} // NEW: Open bulk upload modal
+                        onClick={() => setIsBulkUploadModalOpen(true)}
                         className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200 shadow-md"
                     >
                         Bulk Upload
@@ -121,6 +239,7 @@ const CustomerPage = () => {
 
             {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>}
 
+            {/* Add/Edit Customer Modal */}
             <AddContactModal
                 isOpen={isAddCustomerModalOpen}
                 onClose={() => setIsAddCustomerModalOpen(false)}
@@ -131,23 +250,35 @@ const CustomerPage = () => {
                 type="customer"
             />
 
-            {/* NEW: Bulk Uploader for Customers */}
+            {/* Bulk Uploader for Customers */}
             <BulkUploader
                 isOpen={isBulkUploadModalOpen}
                 onClose={() => setIsBulkUploadModalOpen(false)}
-                endpoint="/customers/bulk-upload" // Specific API endpoint
-                fields={customerUploadFields} // Fields definition for instructions and mapping
-                type="customers" // Type string for instructions
-                onUploadSuccess={handleBulkUploadSuccess} // Callback on success
+                endpoint="/customers/bulk-upload"
+                fields={customerUploadFields}
+                type="customers"
+                onUploadSuccess={handleBulkUploadSuccess}
             />
 
+            {/* Confirmation Modal for Delete */}
             <ConfirmationModal
                 isOpen={isConfirmationModalOpen}
                 onClose={() => setIsConfirmationModalOpen(false)}
-                onConfirm={handleDeleteCustomerClick} // Call handler directly, it manages staffToDelete internally
+                onConfirm={confirmDeleteCustomer}
                 title="Confirm Customer Deletion"
                 message={`Are you sure you want to delete this customer? This will also delete their associated portal login if one exists.`}
             />
+
+            {/* Customer Profile Modal */}
+            {isCustomerProfileModalOpen && ( // Only render if open
+                <CustomerProfileModal
+                    isOpen={isCustomerProfileModalOpen}
+                    onClose={() => setIsCustomerProfileModalOpen(false)}
+                    customerId={customerToViewId}
+                    onCustomerUpdated={handleOpenEditFromProfileModal}
+                />
+            )}
+
 
             {loading && customers.length === 0 ? (
                 <Loader />
@@ -197,20 +328,7 @@ const CustomerPage = () => {
                                         {customer.salesPersonName || 'Unassigned'}
                                     </td>
                                     <td className="px-6 py-4 text-right whitespace-nowrap">
-                                        <div className="flex justify-end space-x-3">
-                                            <button
-                                                onClick={() => handleEditCustomerClick(customer)}
-                                                className="font-medium text-indigo-600 hover:text-indigo-900"
-                                            >
-                                                Edit
-                                            </button>
-                                            <button
-                                                onClick={() => handleDeleteCustomerClick(customer._id)}
-                                                className="font-medium text-red-600 hover:text-red-900"
-                                            >
-                                                Delete
-                                            </button>
-                                        </div>
+                                        <ActionDropdown customer={customer} />
                                     </td>
                                 </tr>
                             ))}

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { protect, authorize } = require('../middleware/authMiddleware');
 
-// Import controller functions (ensure getStaffAbsences is imported)
+// Import controller functions
 const {
     createStaff,
     getStaff,
@@ -12,8 +12,9 @@ const {
     addStaffAbsence,
     updateStaffAbsence,
     deleteStaffAbsence,
-    getStaffAbsences, // <-- ENSURE THIS IS IMPORTED
-    sendRouteToStaff
+    getStaffAbsences,
+    sendRouteToStaff,
+    getStaffStats // <--- ENSURE THIS IS IMPORTED
 } = require('../controllers/staffController');
 
 // Define the main staff routes
@@ -21,21 +22,23 @@ router.route('/')
     .post(protect, authorize('admin', 'manager'), createStaff)
     .get(protect, authorize('admin', 'manager'), getStaff);
 
+// NEW ROUTE: Staff Stats - Must be before /:id to avoid conflict
+router.get('/:id/stats', protect, authorize(['admin', 'manager', 'staff']), getStaffStats);
+
 router.route('/:id')
     .get(protect, authorize('admin', 'manager', 'staff'), getStaffById)
     .put(protect, authorize('admin', 'manager'), updateStaff)
     .delete(protect, authorize('admin'), deleteStaff);
 
 // Routes for staff absences (for operations on a staff member's embedded absences)
-// IMPORTANT: Added .get handler here to fetch staff absences
 router.route('/:staffId/absences')
-    .post(protect, authorize(['admin', 'manager', 'staff']), addStaffAbsence) // Staff can add for themselves, so authorize 'staff' here
-    .get(protect, authorize(['admin', 'manager', 'staff']), getStaffAbsences); // <--- ADDED THIS LINE for GET /api/staff/:staffId/absences
+    .post(protect, authorize(['admin', 'manager', 'staff']), addStaffAbsence)
+    .get(protect, authorize(['admin', 'manager', 'staff']), getStaffAbsences);
 
 // Routes for a specific absence period within a staff member's absences
 router.route('/:staffId/absences/:absenceId')
-    .put(protect, authorize(['admin', 'manager', 'staff']), updateStaffAbsence) // Staff can update their own, managers/admins can update any
-    .delete(protect, authorize(['admin', 'manager', 'staff']), deleteStaffAbsence); // Staff can delete their own, managers/admins can delete any
+    .put(protect, authorize(['admin', 'manager', 'staff']), updateStaffAbsence)
+    .delete(protect, authorize(['admin', 'manager', 'staff']), deleteStaffAbsence);
 
 // NEW ROUTE FOR SENDING ROUTES TO STAFF
 router.post('/send-route', protect, authorize('admin', 'manager'), sendRouteToStaff);

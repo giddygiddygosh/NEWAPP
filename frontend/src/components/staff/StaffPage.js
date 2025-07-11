@@ -1,12 +1,11 @@
-/// ServiceOS/frontend/src/components/staff/StaffPage.js
-
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import Modal from '../common/Modal'; // Assuming your Modal component is here
 import Loader from '../common/Loader'; // Assuming your Loader component is here
 import AddContactModal from '../common/AddContactModal'; // For adding/editing staff member details
 import ConfirmationModal from '../common/ConfirmationModal'; // For confirming deletions
-import { Users, UserPlus, Edit, Trash2, UserCheck, UserX } from 'lucide-react'; // Icons
+import { Users, UserPlus, Edit, Trash2, UserCheck, UserX, User } from 'lucide-react'; // Import User for view profile icon
+import StaffProfileModal from './StaffProfileModal'; // <--- NEW IMPORT: StaffProfileModal
 
 // This is a placeholder component for StaffPage.
 // Its primary function will be to fetch and manage staff data,
@@ -20,6 +19,10 @@ const StaffPage = () => {
 
     const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
     const [staffMemberToDelete, setStaffMemberToDelete] = useState(null);
+
+    // NEW STATES for StaffProfileModal
+    const [isStaffProfileModalOpen, setIsStaffProfileModalOpen] = useState(false);
+    const [staffMemberToViewId, setStaffMemberToViewId] = useState(null);
 
     // Options for staff roles (used by AddContactModal when type='staff')
     const roleOptions = [
@@ -62,6 +65,24 @@ const StaffPage = () => {
         fetchStaff(); // Re-fetch staff list to show updates
         handleCloseAddStaffModal();
     };
+
+    // NEW HANDLERS for StaffProfileModal
+    const handleViewStaffProfileClick = (staffId) => {
+        setStaffMemberToViewId(staffId);
+        setIsStaffProfileModalOpen(true);
+    };
+
+    const handleCloseStaffProfileModal = () => {
+        setIsStaffProfileModalOpen(false);
+        setStaffMemberToViewId(null);
+    };
+
+    // This is called from StaffProfileModal when "Edit Profile" is clicked
+    const handleOpenEditFromProfileModal = (staffData) => {
+        setIsStaffProfileModalOpen(false); // Close profile modal
+        handleOpenAddStaffModal(staffData); // Open edit modal with staff data
+    };
+
 
     // Handlers for Delete Staff
     const handleOpenDeleteConfirm = (staffMember) => {
@@ -149,6 +170,14 @@ const StaffPage = () => {
                                         </td>
                                         <td className="px-6 py-4 text-center whitespace-nowrap">
                                             <div className="flex justify-center items-center space-x-3">
+                                                {/* New View Profile Button */}
+                                                <button
+                                                    onClick={() => handleViewStaffProfileClick(staffMember._id)}
+                                                    className="font-medium text-blue-600 hover:text-blue-800"
+                                                    title="View Staff Profile"
+                                                >
+                                                    <User size={16} /> {/* Using User icon for profile view */}
+                                                </button>
                                                 <button
                                                     onClick={() => handleOpenAddStaffModal(staffMember)}
                                                     className="font-medium text-blue-600 hover:text-blue-800"
@@ -189,8 +218,18 @@ const StaffPage = () => {
                 onClose={handleCloseDeleteConfirm}
                 onConfirm={confirmDeleteStaff}
                 title="Confirm Staff Deletion"
-                message={`Are you sure you want to delete staff member "${staffMemberToDelete?.contactPersonName || 'N/A'}"? This action cannot be undone.`}
+                message={`Are you sure you want to delete staff member "${staffMemberToDelete?.contactPersonName || 'N/A'}"? This will also delete their associated login user account and cannot be undone.`}
             />
+
+            {/* NEW: Staff Profile Modal */}
+            {isStaffProfileModalOpen && (
+                <StaffProfileModal
+                    isOpen={isStaffProfileModalOpen}
+                    onClose={handleCloseStaffProfileModal}
+                    staffId={staffMemberToViewId}
+                    onStaffUpdated={handleOpenEditFromProfileModal} // Allows editing from inside the profile modal
+                />
+            )}
         </div>
     );
 };

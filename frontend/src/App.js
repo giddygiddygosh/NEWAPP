@@ -10,7 +10,7 @@ import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
 import CustomerPage from './components/customers/CustomerPage';
 import Dashboard from './components/dashboard/Dashboard';
 import LeadsView from './components/customers/LeadsView';
-import Sidebar from './components/navigation/Sidebar'; // Keep Sidebar import
+import Sidebar from './components/navigation/Sidebar';
 import SettingsPage from './components/settings/SettingsPage';
 import EmailTemplatesView from './components/email-templates/EmailTemplatesView';
 import FormBuilderPage from './components/forms/FormBuilderPage';
@@ -73,9 +73,9 @@ const getDefaultDashboardPath = (userRole) => {
     if (!userRole) return '/login';
     switch (userRole) {
         case 'customer': return '/customer-portal';
-        case 'staff': return '/staff-dashboard'; // Staff doesn't use the main admin dashboard
-        case 'manager': return '/dashboard'; // Manager goes to main dashboard (with sidebar)
-        case 'admin': return '/dashboard'; // Admin goes to main dashboard (with sidebar)
+        case 'staff': return '/staff-dashboard';
+        case 'manager': return '/dashboard';
+        case 'admin': return '/dashboard';
         default: return '/login';
     }
 };
@@ -101,44 +101,40 @@ const PrivateRoute = ({ children, roles }) => {
 };
 
 function AppContent() {
-    const { user, loading } = useAuth(); // Removed logout as it's passed directly to Sidebar/Logout buttons
+    // Corrected: Destructure 'logout' from useAuth
+    const { user, loading, logout } = useAuth();
     const location = useLocation();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     // Determine if the sidebar should be shown at all
-    // It should only show for roles that *have* a sidebar (admin, manager)
     const shouldRenderSidebar = user && !loading && ['admin', 'manager'].includes(user.role) &&
-                                !['/login', '/signup', '/forgot-password', '/quote-request'].includes(location.pathname) &&
-                                !location.pathname.startsWith('/forms/'); // Public forms don't need sidebar
+                                 !['/login', '/signup', '/forgot-password', '/quote-request'].includes(location.pathname) &&
+                                 !location.pathname.startsWith('/forms/');
 
-    // This effect now ONLY manages the open/close state if a sidebar is being rendered
     useLayoutEffect(() => {
         const updateSidebarState = () => setIsSidebarOpen(window.innerWidth >= 768);
         if (shouldRenderSidebar) {
             updateSidebarState();
             window.addEventListener('resize', updateSidebarState);
         } else {
-            // Ensure it's always closed/not occupying space if not rendered
             setIsSidebarOpen(false);
         }
         return () => window.removeEventListener('resize', updateSidebarState);
-    }, [shouldRenderSidebar]); // Depend on shouldRenderSidebar
+    }, [shouldRenderSidebar]);
 
     const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
     // Calculate margin based on whether a sidebar is rendered AND its open/collapsed state
-    let mainContentMarginClass = 'ml-0'; // Default to no margin
+    let mainContentMarginClass = 'ml-0';
     if (shouldRenderSidebar) {
-        mainContentMarginClass = isSidebarOpen ? 'ml-64' : 'ml-20'; // Full or collapsed sidebar margin
+        mainContentMarginClass = isSidebarOpen ? 'ml-64' : 'ml-20';
     }
-    // For roles that don't get a sidebar, mainContentMarginClass remains 'ml-0'
-
 
     return (
         <div className="flex h-screen bg-gray-50">
             {shouldRenderSidebar && (
-                // Pass toggleSidebar and user/logout to the Sidebar component
-                <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} user={user} />
+                // Pass toggleSidebar, user, and logout to the Sidebar component
+                <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} user={user} logout={logout} />
             )}
             <main className={`flex-1 overflow-auto transition-all duration-300 ease-in-out ${mainContentMarginClass}`}>
                 <MapsApiProvider>
@@ -157,14 +153,14 @@ function AppContent() {
                         <Route path="/customer-portal/emergency" element={<PrivateRoute roles={['customer']}><CustomerEmergencyPage /></PrivateRoute>} />
 
                         {/* Staff Portal Routes (No Sidebar) */}
-                        <Route path="/staff-dashboard" element={<PrivateRoute roles={['staff']}><StaffDashboard /></PrivateRoute>} /> {/* Only staff role gets this specific dashboard */}
-                        <Route path="/staff-schedule" element={<PrivateRoute roles={['staff']}><StaffSchedulePage /></PrivateRoute>} /> {/* Only staff role gets this */}
-                        <Route path="/my-payslips" element={<PrivateRoute roles={['staff']}><MyPayslipsPage /></PrivateRoute>} /> {/* Only staff role gets this */}
+                        <Route path="/staff-dashboard" element={<PrivateRoute roles={['staff']}><StaffDashboard /></PrivateRoute>} />
+                        <Route path="/staff-schedule" element={<PrivateRoute roles={['staff']}><StaffSchedulePage /></PrivateRoute>} />
+                        <Route path="/my-payslips" element={<PrivateRoute roles={['staff']}><MyPayslipsPage /></PrivateRoute>} />
 
                         {/* Admin/Manager Routes (WITH Sidebar) */}
                         <Route path="/dashboard" element={<PrivateRoute roles={['admin', 'manager']}><Dashboard /></PrivateRoute>} />
                         <Route path="/customers" element={<PrivateRoute roles={['admin', 'manager']}><CustomerPage /></PrivateRoute>} />
-                        <Route path="/leads" element={<PrivateRoute roles={['admin', 'manager', 'staff']}><LeadsView /></PrivateRoute>} /> {/* Leads can be seen by staff too */}
+                        <Route path="/leads" element={<PrivateRoute roles={['admin', 'manager', 'staff']}><LeadsView /></PrivateRoute>} />
                         <Route path="/staff" element={<PrivateRoute roles={['admin', 'manager']}><StaffPage /></PrivateRoute>} />
                         <Route path="/form-builder" element={<PrivateRoute roles={['admin']}><DndProvider backend={HTML5Backend}><FormBuilderPage /></DndProvider></PrivateRoute>} />
                         <Route path="/settings" element={<PrivateRoute roles={['admin']}><SettingsPage /></PrivateRoute>} />
@@ -174,11 +170,10 @@ function AppContent() {
                         <Route path="/staff-absence" element={<PrivateRoute roles={['admin', 'manager']}><StaffAbsencePage /></PrivateRoute>} />
                         <Route path="/email-templates" element={<PrivateRoute roles={['admin']}><EmailTemplatesView /></PrivateRoute>} />
                         <Route path="/invoices" element={<PrivateRoute roles={['admin', 'manager']}><InvoicePage /></PrivateRoute>} />
-                        <Route path="/invoices/:invoiceId" element={<PrivateRoute roles={['admin', 'manager', 'staff']}><InvoiceDetails /></PrivateRoute>} /> {/* Staff can view specific invoices too */}
+                        <Route path="/invoices/:invoiceId" element={<PrivateRoute roles={['admin', 'manager', 'staff']}><InvoiceDetails /></PrivateRoute>} />
                         <Route path="/payroll" element={<PrivateRoute roles={['admin', 'manager']}><PayrollPage /></PrivateRoute>} />
                         <Route path="/commission-report" element={<PrivateRoute roles={['admin', 'manager']}><CommissionReportPage /></PrivateRoute>} />
-                        <Route path="/spot-checker" element={<PrivateRoute roles={['admin', 'manager', 'staff']}><SpotCheckerPage /></PrivateRoute>} /> {/* Accessible by staff too */}
-
+                        <Route path="/spot-checker" element={<PrivateRoute roles={['admin', 'manager', 'staff']}><SpotCheckerPage /></PrivateRoute>} />
 
                         {/* Default Route */}
                         <Route path="/" element={loading ? <div>Loading...</div> : <Navigate to={user ? getDefaultDashboardPath(user.role) : "/login"} replace />} />
@@ -195,7 +190,7 @@ function App() {
             <AuthProvider>
                 <CurrencyProvider>
                     <MapsApiProvider>
-                        <DndProvider backend={HTML5Backend}> {/* DndProvider wraps the entire app where dragging might occur */}
+                        <DndProvider backend={HTML5Backend}>
                             <AppContent />
                         </DndProvider>
                     </MapsApiProvider>

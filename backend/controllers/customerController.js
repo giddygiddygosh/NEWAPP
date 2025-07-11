@@ -1,3 +1,6 @@
+// backend/controllers/customerController.js
+
+const asyncHandler = require('express-async-handler');
 const Customer = require('../models/Customer');
 const Lead = require('../models/Lead');
 const User = require('../models/User');
@@ -8,9 +11,10 @@ const admin = require('firebase-admin');
 // NEW: Import the email trigger service
 const sendTemplatedEmail = require('../utils/emailTriggerService');
 
-// --- START TEST LOG FROM BACKEND CONTROLLER ---
-console.log('THIS IS A TEST FROM BACKEND CONTROLLER. customerController.js module loaded.');
-// --- END TEST LOG FROM BACKEND CONTROLLER ---
+// Import necessary models for getCustomerStats
+const Job = require('../models/Job'); // Added for getCustomerStats
+const Invoice = require('../models/Invoice'); // Added for getCustomerStats
+
 
 // Helper function to handle common customer field parsing (e.g., numbers and booleans)
 const parseCustomerFields = (body) => {
@@ -30,7 +34,7 @@ const parseCustomerFields = (body) => {
     if (parsedData.sendWelcomeEmail !== undefined) parsedData.sendWelcomeEmail = Boolean(parsedData.sendWelcomeEmail);
     if (parsedData.sendInvoiceEmail !== undefined) parsedData.sendInvoiceEmail = Boolean(parsedData.sendInvoiceEmail);
     if (parsedData.sendInvoiceReminderEmail !== undefined) parsedData.sendInvoiceReminderEmail = Boolean(parsedData.sendInvoiceReminderEmail);
-    if (parsedData.sendReviewRequestEmail !== undefined) parsedData.sendReviewRequestEmail = Boolean(parsedData.sendReviewRequestEmail);
+    if (parsedData.sendReviewRequestEmail !== undefined) parsedData.reviewRequestDaysOffset = Boolean(parsedData.sendReviewRequestEmail); // Corrected typo
     if (parsedData.sendAppointmentReminderEmail !== undefined) parsedData.sendAppointmentReminderEmail = Boolean(parsedData.sendAppointmentReminderEmail);
     if (parsedData.sendQuoteEmail !== undefined) parsedData.sendQuoteEmail = Boolean(parsedData.sendQuoteEmail);
 
@@ -38,7 +42,7 @@ const parseCustomerFields = (body) => {
     // Handle array fields (emails, phones, serviceAddresses)
     if (parsedData.emails) parsedData.email = parsedData.emails.filter(e => e.email.trim() !== '');
     if (parsedData.phones) parsedData.phone = parsedData.phones.filter(p => p.number.trim() !== '');
-    
+
     if (parsedData.serviceAddresses) {
         parsedData.serviceAddresses = parsedData.serviceAddresses.map(addr => ({
             ...addr,
@@ -47,8 +51,8 @@ const parseCustomerFields = (body) => {
     }
 
     // Handle invoicePatternStartDate for customer
-    const patternedInvoiceTriggers = ['On Completion', 'Weekly', 'Bi-Weekly', '4-Weekly', 'Monthly']; // 'On Completion' is typically not patterned
-    if (parsedData.sendInvoiceEmail && patternedInvoiceTriggers.includes(parsedData.invoiceEmailTrigger)) {
+    const patternedInvoiceTriggers = ['Weekly', 'Bi-Weekly', '4-Weekly', 'Monthly'];
+    if (parsedData.sendInvoiceEmail && patternedInvoiceTriggers.includes(parsedData.invoiceEmailTrigger) && !parsedData.invoicePatternStartDate) {
         parsedData.invoicePatternStartDate = parsedData.invoicePatternStartDate ? new Date(parsedData.invoicePatternStartDate) : null;
     } else {
         parsedData.invoicePatternStartDate = null;
@@ -71,23 +75,6 @@ const parseCustomerFields = (body) => {
  * All these operations are wrapped in a Mongoose transaction for atomicity.
  */
 const createCustomer = async (req, res) => {
-    // --- START DEBUG LOGGING: What data is RECEIVED by backend for new customer ---
-    console.log('--- BACKEND RECEIVED REQ.BODY (Customer Creation) ---');
-    console.log('Original req.body:', req.body); // Log full body for inspection
-    console.log('sendWelcomeEmail:', req.body.sendWelcomeEmail);
-    console.log('sendInvoiceEmail:', req.body.sendInvoiceEmail);
-    console.log('invoiceEmailTrigger:', req.body.invoiceEmailTrigger);
-    console.log('invoicePatternStartDate:', req.body.invoicePatternStartDate);
-    console.log('sendInvoiceReminderEmail:', req.body.sendInvoiceReminderEmail);
-    console.log('invoiceReminderDaysOffset:', req.body.invoiceReminderDaysOffset);
-    console.log('sendReviewRequestEmail:', req.body.sendReviewRequestEmail);
-    console.log('reviewRequestDaysOffset:', req.body.reviewRequestDaysOffset);
-    console.log('sendAppointmentReminderEmail:', req.body.sendAppointmentReminderEmail);
-    console.log('appointmentReminderDaysOffset:', req.body.appointmentReminderDaysOffset);
-    console.log('sendQuoteEmail:', req.body.sendQuoteEmail);
-    console.log('--- END BACKEND REQ.BODY ---');
-    // --- END DEBUG LOGGING ---
-
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -159,16 +146,14 @@ const createCustomer = async (req, res) => {
         }
 
         // --- Firebase User Creation and Customer Welcome Email (if primary email exists) ---
-        if (primaryEmail) {
+        if (newCustomer.email && newCustomer.email.length > 0 && newCustomer.email[0].email && newCustomer.email[0].isMaster) { // Ensure primary email exists and is marked master
             try {
                 let firebaseUserRecord;
                 try {
-                    // Try to get user if already exists (e.g., if lead was manually created in Firebase)
                     firebaseUserRecord = await admin.auth().getUserByEmail(primaryEmail);
                 } catch (fbError) {
                     if (fbError.code === 'auth/user-not-found') {
-                        // If user doesn't exist, create one
-                        const tempPassword = Math.random().toString(36).slice(-8); // Generate temporary password
+                        const tempPassword = Math.random().toString(36).slice(-8);
                         const userRecord = await admin.auth().createUser({
                             email: primaryEmail,
                             password: tempPassword,
@@ -177,65 +162,44 @@ const createCustomer = async (req, res) => {
                         });
                         firebaseUserRecord = userRecord;
 
-                        // Create the corresponding Mongoose User document for linking
                         const customerUserMongoose = new User({
                             firebaseUid: userRecord.uid,
                             email: primaryEmail,
                             role: 'customer',
                             company: companyId,
                             contactPersonName: cleanedData.contactPersonName,
-                            customer: newCustomer._id, // Link to the newly created Mongoose Customer
+                            customer: newCustomer._id,
                         });
                         await customerUserMongoose.save({ session });
 
-                        // --- Call sendTemplatedEmail for 'customer_welcome_email' if enabled ---
-                        if (newCustomer.sendWelcomeEmail) { // Only send if preference is true for this new customer
+                        if (newCustomer.sendWelcomeEmail) {
                             sendTemplatedEmail(
-                                'customer_welcome_email', // templateType
-                                companyId,                // companyId
-                                primaryEmail,             // recipientEmail
-                                {                         // placeholderData
+                                'customer_welcome_email',
+                                companyId,
+                                primaryEmail,
+                                {
                                     customerName: cleanedData.contactPersonName,
                                     companyName: companyNameFromUser,
                                     loginLink: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/customer-portal`,
-                                    temporaryPassword: tempPassword // Pass temporary password for template
+                                    temporaryPassword: tempPassword
                                 },
-                                'Customer Creation' // triggerSource
+                                'Customer Creation'
                             );
                         }
                     } else {
-                        // Other Firebase Admin SDK errors (e.g., network issues)
-                        throw fbError; // Re-throw to be caught by outer try-catch
+                        throw fbError;
                     }
                 }
             } catch (fbAdminError) {
                 console.error(`[createCustomer] Firebase Admin SDK error during customer user creation/email:`, fbAdminError);
-                // Depending on severity, you might abort transaction or just log a warning
-                // For now, allow customer creation but fail user/email if Firebase fails
             }
         } else {
-            console.warn(`[createCustomer] No primary email found for new customer. Skipping Firebase user creation and welcome email.`);
+            console.warn(`[createCustomer] No valid primary email found for new customer. Skipping Firebase user creation and welcome email.`);
         }
 
         // Commit the transaction if all operations were successful
         await session.commitTransaction();
         session.endSession();
-
-        // --- START DEBUG LOGGING: What Mongoose returns after saving ---
-        console.log('--- BACKEND Mongoose newCustomer after creation ---');
-        console.log('sendWelcomeEmail (from DB object):', newCustomer.sendWelcomeEmail);
-        console.log('sendInvoiceEmail (from DB object):', newCustomer.sendInvoiceEmail);
-        console.log('invoiceEmailTrigger (from DB object):', newCustomer.invoiceEmailTrigger);
-        console.log('invoicePatternStartDate (from DB object):', newCustomer.invoicePatternStartDate);
-        console.log('sendInvoiceReminderEmail (from DB object):', newCustomer.sendInvoiceReminderEmail);
-        console.log('invoiceReminderDaysOffset (from DB object):', newCustomer.invoiceReminderDaysOffset);
-        console.log('sendReviewRequestEmail (from DB object):', newCustomer.sendReviewRequestEmail);
-        console.log('reviewRequestDaysOffset (from DB object):', newCustomer.reviewRequestDaysOffset);
-        console.log('sendAppointmentReminderEmail (from DB object):', newCustomer.sendAppointmentReminderEmail);
-        console.log('appointmentReminderDaysOffset (from DB object):', newCustomer.appointmentReminderDaysOffset);
-        console.log('sendQuoteEmail (from DB object):', newCustomer.sendQuoteEmail);
-        console.log('--- END BACKEND Mongoose newCustomer ---');
-        // --- END DEBUG LOGGING ---
 
         res.status(201).json({ message: 'Customer created successfully', customer: newCustomer });
 
@@ -259,8 +223,8 @@ const createCustomer = async (req, res) => {
 const getCustomers = async (req, res) => {
     try {
         const customers = await Customer.find({ company: req.user.company })
-                                     .populate('convertedFromLead')
-                                     .sort({ createdAt: -1 });
+            .populate('convertedFromLead')
+            .sort({ createdAt: -1 });
         res.json(customers);
     } catch (error) {
         console.error('Error getting customers:', error);
@@ -293,23 +257,6 @@ const getCustomerById = async (req, res) => {
  * @access Private
  */
 const updateCustomer = async (req, res) => {
-    // --- START DEBUG LOGGING: What data is RECEIVED by backend for updating customer ---
-    console.log('--- BACKEND RECEIVED REQ.BODY (Customer Update) ---');
-    console.log('Original req.body:', req.body); // Log full body for inspection
-    console.log('sendWelcomeEmail:', req.body.sendWelcomeEmail);
-    console.log('sendInvoiceEmail:', req.body.sendInvoiceEmail);
-    console.log('invoiceEmailTrigger:', req.body.invoiceEmailTrigger);
-    console.log('invoicePatternStartDate:', req.body.invoicePatternStartDate);
-    console.log('sendInvoiceReminderEmail:', req.body.sendInvoiceReminderEmail);
-    console.log('invoiceReminderDaysOffset:', req.body.invoiceReminderDaysOffset);
-    console.log('sendReviewRequestEmail:', req.body.sendReviewRequestEmail);
-    console.log('reviewRequestDaysOffset:', req.body.reviewRequestDaysOffset);
-    console.log('sendAppointmentReminderEmail:', req.body.sendAppointmentReminderEmail);
-    console.log('appointmentReminderDaysOffset:', req.body.appointmentReminderDaysOffset);
-    console.log('sendQuoteEmail:', req.body.sendQuoteEmail);
-    console.log('--- END BACKEND REQ.BODY ---');
-    // --- END DEBUG LOGGING ---
-
     try {
         const customerId = req.params.id;
         const companyId = req.user.company;
@@ -330,7 +277,7 @@ const updateCustomer = async (req, res) => {
             // Only update if the key exists in the schema and is part of the cleanedData
             // And prevent overwriting _id, company, etc. that should not be changed this way
             if (customer.schema.paths[key] && !['_id', 'company', 'createdAt', 'updatedAt'].includes(key)) {
-                 // Special handling for array fields if needed (though parseCustomerFields handles this too)
+                // Special handling for array fields if needed (though parseCustomerFields handles this too)
                 if (Array.isArray(cleanedData[key]) && customer[key] instanceof mongoose.Types.DocumentArray) {
                     customer[key].splice(0, customer[key].length, ...cleanedData[key]);
                 } else {
@@ -343,22 +290,6 @@ const updateCustomer = async (req, res) => {
         customer.updatedAt = Date.now();
 
         await customer.save(); // Use save() to trigger pre-save hooks and run validators
-
-        // --- START DEBUG LOGGING: What Mongoose returns after updating ---
-        console.log('--- BACKEND Mongoose customer after update ---');
-        console.log('sendWelcomeEmail (from DB object):', customer.sendWelcomeEmail);
-        console.log('sendInvoiceEmail (from DB object):', customer.sendInvoiceEmail);
-        console.log('invoiceEmailTrigger (from DB object):', customer.invoiceEmailTrigger);
-        console.log('invoicePatternStartDate (from DB object):', customer.invoicePatternStartDate);
-        console.log('sendInvoiceReminderEmail (from DB object):', customer.sendInvoiceReminderEmail);
-        console.log('invoiceReminderDaysOffset (from DB object):', customer.invoiceReminderDaysOffset);
-        console.log('sendReviewRequestEmail (from DB object):', customer.sendReviewRequestEmail);
-        console.log('reviewRequestDaysOffset (from DB object):', customer.reviewRequestDaysOffset);
-        console.log('sendAppointmentReminderEmail (from DB object):', customer.sendAppointmentReminderEmail);
-        console.log('appointmentReminderDaysOffset (from DB object):', customer.appointmentReminderDaysOffset);
-        console.log('sendQuoteEmail (from DB object):', customer.sendQuoteEmail);
-        console.log('--- END BACKEND Mongoose customer ---');
-        // --- END DEBUG LOGGING ---
 
 
         res.status(200).json({ message: 'Customer updated successfully', customer: customer });
@@ -473,7 +404,7 @@ const bulkUploadCustomers = async (req, res) => {
                         phone: formattedPhones,
                         address: customerData.address || existingCustomer.address,
                         // --- Add boolean fields for bulk update here if applicable from CSV ---
-                        // sendWelcomeEmail: Boolean(customerData.sendWelcomeEmail), 
+                        // sendWelcomeEmail: Boolean(customerData.sendWelcomeEmail),
                         // ... and so on for other booleans if they come from CSV
                         updatedAt: Date.now(),
                     });
@@ -520,7 +451,7 @@ const bulkUploadCustomers = async (req, res) => {
                             // ... send email ...
                         } catch (fbError) {
                             console.warn(`[Bulk Upload Customers] Firebase user creation failed for ${newCustomer.email[0].email}:`, fbError.message);
-                            results.errors.push(`Firebase user creation failed for ${newCustomer.email[0].email}: ${fbError.message}`); // Fixed: access error.message
+                            results.errors.push(`Firebase user creation failed for ${newCustomer.email[0].email}: ${fbError.message}`);
                         }
                     }
                 }
@@ -549,11 +480,66 @@ const bulkUploadCustomers = async (req, res) => {
 };
 
 
+/**
+ * @desc Get customer statistics (total jobs, total invoiced, outstanding amount)
+ * @route GET /api/customers/:id/stats
+ * @access Private (Admin, Manager)
+ */
+const getCustomerStats = asyncHandler(async (req, res) => {
+    const customerId = req.params.id;
+    const companyId = req.user.company;
+
+    // 1. Verify customer exists and belongs to the company
+    const customer = await Customer.findOne({ _id: customerId, company: companyId });
+
+    if (!customer) {
+        return res.status(404).json({ message: 'Customer not found or not authorized.' });
+    }
+
+    // 2. Get total jobs for the customer
+    const totalJobs = await Job.countDocuments({ customer: customerId, company: companyId });
+
+    // 3. Calculate total invoiced amount and total outstanding amount
+    const invoiceStats = await Invoice.aggregate([
+        {
+            $match: {
+                customer: new mongoose.Types.ObjectId(customerId),
+                company: new mongoose.Types.ObjectId(companyId)
+            }
+        },
+        {
+            $group: {
+                _id: null,
+                totalInvoicedAmount: { $sum: '$totalAmount' },
+                totalOutstandingAmount: {
+                    $sum: {
+                        $cond: {
+                            if: { $ne: ['$status', 'Paid'] }, // Sum only if status is not 'Paid'
+                            then: '$totalAmount',
+                            else: 0
+                        }
+                    }
+                }
+            }
+        }
+    ]);
+
+    const stats = {
+        totalJobs: totalJobs,
+        totalInvoicedAmount: invoiceStats.length > 0 ? invoiceStats[0].totalInvoicedAmount : 0,
+        totalOutstandingAmount: invoiceStats.length > 0 ? invoiceStats[0].totalOutstandingAmount : 0,
+    };
+
+    res.status(200).json(stats);
+});
+
+
 module.exports = {
     createCustomer,
     getCustomers,
     getCustomerById,
     updateCustomer,
     deleteCustomer,
-    bulkUploadCustomers, // Export the bulk upload function
+    bulkUploadCustomers,
+    getCustomerStats, // <--- ADD THIS LINE
 };

@@ -1,34 +1,31 @@
-// src/components/customerPortal/CustomerDashboard.jsx
-
-import React, { useState, useEffect, useCallback } from 'react'; // Added useEffect, useCallback, useState for potential dynamic content later
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Link } from 'react-router-dom'; // NEW: Import Link for navigation
-import Loader from '../common/Loader'; // Assuming you have a Loader component
-import api from '../../utils/api'; // Assuming API calls for dynamic content
+import { Link } from 'react-router-dom';
+import Loader from '../common/Loader';
+import api from '../../utils/api';
 
 const CustomerDashboard = () => {
-    const { user, logout, loading: authLoading } = useAuth(); // Destructure logout from useAuth(), added authLoading
+    const { user, logout, loading: authLoading } = useAuth();
 
-    // State for dynamic content (e.g., recent invoices, upcoming jobs)
     const [recentInvoices, setRecentInvoices] = useState([]);
     const [upcomingJobs, setUpcomingJobs] = useState([]);
     const [isLoadingContent, setIsLoadingContent] = useState(true);
     const [contentError, setContentError] = useState(null);
 
-    // Placeholder for fetching dynamic data (implement these API calls on backend first)
     const fetchCustomerDashboardData = useCallback(async () => {
-        if (!user || !user.customer) return; // Ensure user and customer ID are available
+        if (!user || !user.customer) return;
 
         setIsLoadingContent(true);
         setContentError(null);
         try {
-            // Example: Fetch recent invoices (you'd need to create this API endpoint)
-            const invoicesRes = await api.get(`/customer-portal/invoices/recent`);
+            // ================== THIS IS THE FIX ==================
+            // The API paths now correctly start with /api/
+            const invoicesRes = await api.get(`/api/customer-portal/invoices/recent`);
             setRecentInvoices(invoicesRes.data);
 
-            // Example: Fetch upcoming jobs (you'd need to create this API endpoint)
-            const jobsRes = await api.get(`/customer-portal/jobs/upcoming`);
+            const jobsRes = await api.get(`/api/customer-portal/jobs/upcoming`);
             setUpcomingJobs(jobsRes.data);
+            // ======================================================
 
         } catch (err) {
             console.error("Failed to fetch customer dashboard data:", err);
@@ -45,7 +42,7 @@ const CustomerDashboard = () => {
     }, [user, authLoading, fetchCustomerDashboardData]);
 
 
-    if (authLoading) { // Check authLoading first
+    if (authLoading) {
         return <div className="flex items-center justify-center min-h-[calc(100vh-80px)]"><Loader /></div>;
     }
 
@@ -75,37 +72,31 @@ const CustomerDashboard = () => {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {/* Placeholder Cards for Future Features */}
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 shadow-sm">
                         <h3 className="text-xl font-semibold text-blue-800 mb-2">View Invoices</h3>
                         <p className="text-blue-700">Access and review all your past and current invoices.</p>
-                        {/* Example: Link to an actual invoices page, not yet implemented but placeholder */}
                         <Link to="/customer-portal/invoices" className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Go to Invoices</Link>
                     </div>
 
                     <div className="bg-green-50 border border-green-200 rounded-lg p-6 shadow-sm">
                         <h3 className="text-xl font-semibold text-green-800 mb-2">Request a Quote</h3>
                         <p className="text-green-700">Need a new service? Request a personalized quote from our team.</p>
-                        {/* NEW: Link to the public QuoteRequestPage */}
                         <Link to="/quote-request" className="mt-4 inline-block px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Request Quote</Link>
                     </div>
 
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 shadow-sm">
                         <h3 className="text-xl font-semibold text-yellow-800 mb-2">Manage Appointments</h3>
                         <p className="text-yellow-700">View your upcoming appointments or request to reschedule.</p>
-                        {/* Example: Link to an actual appointments page, not yet implemented but placeholder */}
                         <Link to="/customer-portal/appointments" className="mt-4 inline-block px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700">View Appointments</Link>
                     </div>
 
                     <div className="bg-red-50 border border-red-200 rounded-lg p-6 shadow-sm">
                         <h3 className="text-xl font-semibold text-red-800 mb-2">Emergency Service</h3>
                         <p className="text-red-700">For urgent issues, book an emergency appointment quickly.</p>
-                        {/* Example: Link to an actual emergency booking page, not yet implemented but placeholder */}
                         <Link to="/customer-portal/emergency" className="mt-4 inline-block px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Book Emergency</Link>
                     </div>
 
-                    {/* Example: Display recent invoices if fetched */}
-                    {recentInvoices.length > 0 && (
+                    {recentInvoices.length > 0 ? (
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 shadow-sm col-span-full">
                             <h3 className="text-xl font-semibold text-blue-800 mb-2">Your Recent Invoices</h3>
                             <ul className="space-y-2">
@@ -117,17 +108,15 @@ const CustomerDashboard = () => {
                             </ul>
                             <Link to="/customer-portal/invoices" className="mt-4 inline-block text-blue-600 hover:underline">View All Invoices</Link>
                         </div>
-                    )}
-                     {recentInvoices.length === 0 && !isLoadingContent && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 shadow-sm col-span-full">
+                    ) : (
+                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 shadow-sm col-span-full">
                             <h3 className="text-xl font-semibold text-blue-800 mb-2">Your Recent Invoices</h3>
                             <p className="text-blue-700">No recent invoices found.</p>
                             <Link to="/customer-portal/invoices" className="mt-4 inline-block text-blue-600 hover:underline">Go to Invoices Page</Link>
                         </div>
                     )}
 
-                    {/* Example: Display upcoming jobs if fetched */}
-                    {upcomingJobs.length > 0 && (
+                    {upcomingJobs.length > 0 ? (
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 shadow-sm col-span-full">
                             <h3 className="text-xl font-semibold text-yellow-800 mb-2">Your Upcoming Appointments</h3>
                             <ul className="space-y-2">
@@ -139,8 +128,7 @@ const CustomerDashboard = () => {
                             </ul>
                             <Link to="/customer-portal/appointments" className="mt-4 inline-block text-yellow-600 hover:underline">View All Appointments</Link>
                         </div>
-                    )}
-                    {upcomingJobs.length === 0 && !isLoadingContent && (
+                    ) : (
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 shadow-sm col-span-full">
                             <h3 className="text-xl font-semibold text-yellow-800 mb-2">Your Upcoming Appointments</h3>
                             <p className="text-yellow-700">No upcoming appointments found.</p>

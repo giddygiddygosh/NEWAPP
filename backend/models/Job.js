@@ -31,11 +31,11 @@ const JobSchema = new mongoose.Schema({
         state: { type: String, trim: true },
         postcode: { type: String, trim: true },
         country: { type: String, trim: true },
-        payType: {
+        payType: { // This seems related to the job itself rather than just address
             type: String,
             enum: ['Fixed', 'Hourly', ''],
         },
-        amount: {
+        amount: { // This also seems job-related, potentially price breakdown per address
             type: Number,
         },
     },
@@ -49,7 +49,6 @@ const JobSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        // FIX: Add 'Invoiced' to the enum array
         enum: ['Booked', 'On Route', 'In Progress', 'Pending Completion', 'Completed', 'Cancelled', 'Invoiced'],
         default: 'Booked',
     },
@@ -58,11 +57,33 @@ const JobSchema = new mongoose.Schema({
         enum: ['Low', 'Medium', 'High', 'Urgent'],
         default: 'Medium',
     },
-    price: {
+    price: { // This is your total job amount
         type: Number,
         required: [true, 'Please add a price'],
         min: [0, 'Price cannot be negative'],
     },
+    // --- NEW FIELDS FOR DEPOSIT PAYMENT ---
+    depositRequired: { // The amount expected as a deposit for this job
+        type: Number,
+        default: 0,
+        min: [0, 'Deposit required cannot be negative'],
+    },
+    depositPaid: { // The amount actually paid as a deposit
+        type: Number,
+        default: 0,
+        min: [0, 'Deposit paid cannot be negative'],
+    },
+    depositPaymentIntentId: { // Stripe Payment Intent ID for the deposit transaction
+        type: String,
+        default: null,
+        trim: true,
+    },
+    depositStatus: { // Status of the deposit payment (e.g., pending, paid, refunded)
+        type: String,
+        enum: ['Not Required', 'Pending', 'Paid', 'Refunded', 'Failed'],
+        default: 'Not Required', // Default to not required
+    },
+    // --- END NEW FIELDS ---
     usedStock: [
         {
             stockId: {
@@ -163,8 +184,27 @@ const JobSchema = new mongoose.Schema({
     },
 });
 
+// --- NEW pre-save hook to manage depositStatus ---
 JobSchema.pre('save', function (next) {
+    // Update updatedAt timestamp
     this.updatedAt = Date.now();
+
+    // Logic for depositStatus
+    // If deposit is required but nothing paid, or partial paid, it's 'Pending'
+    if (this.depositRequired > 0) {
+        if (this.depositPaid >= this.depositRequired) {
+            this.depositStatus = 'Paid';
+        } else if (this.depositPaid > 0 && this.depositPaid < this.depositRequired) {
+            this.depositStatus = 'Pending'; // Still pending if partially paid
+        } else { // depositPaid is 0
+            this.depositStatus = 'Pending';
+        }
+    } else { // depositRequired is 0 or less
+        this.depositStatus = 'Not Required';
+        this.depositPaid = 0; // Ensure paid is 0 if not required
+        this.depositPaymentIntentId = null; // Clear intent ID if not required
+    }
+
     next();
 });
 

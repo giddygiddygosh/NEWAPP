@@ -43,7 +43,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Import Routes
 const authRoutes = require('./routes/authRoutes');
-const customerRoutes = require('./routes/customerRoutes'); // <-- Corrected line here!
+const customerRoutes = require('./routes/customerRoutes');
 const leadRoutes = require('./routes/leadRoutes');
 const formRoutes = require('./routes/formRoutes');
 const publicRoutes = require('./routes/publicRoutes');
@@ -61,6 +61,7 @@ const mailRoutes = require('./routes/mailRoutes');
 const routePlannerRoutes = require('./routes/routePlannerRoutes');
 const commissionReportRoutes = require('./routes/commissionReportRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const stripeRoutes = require('./routes/stripeRoutes'); // <--- ADDED THIS LINE
 
 // Use Routes
 app.use('/api/auth', authRoutes);
@@ -82,6 +83,7 @@ app.use('/api/mail', mailRoutes);
 app.use('/api/routes', routePlannerRoutes);
 app.use('/api/reports', commissionReportRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/stripe', stripeRoutes); // <--- ADDED THIS LINE
 
 // Home route
 app.get('/', (req, res) => {

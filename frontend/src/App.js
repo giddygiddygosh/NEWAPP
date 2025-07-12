@@ -1,7 +1,14 @@
-import React, { useState, useLayoutEffect, createContext, useContext } from 'react';
+import React, { useState, useLayoutEffect, createContext, useContext, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/context/AuthContext';
 import { CurrencyProvider } from './components/context/CurrencyContext';
+
+// Stripe Imports (needed for PaymentModal)
+import { Elements } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
+
+// Import i18n configuration
+import './i18n';
 
 // --- COMPONENT IMPORTS ---
 import LoginPage from './components/auth/LoginPage';
@@ -37,6 +44,10 @@ import MyPayslipsPage from './components/staffPortal/MyPayslipsPage';
 import CustomerInvoicesPage from './components/customerPortal/CustomerInvoicesPage';
 import CustomerAppointmentsPage from './components/customerPortal/CustomerAppointmentsPage';
 import CustomerEmergencyPage from './components/customerPortal/CustomerEmergencyPage';
+
+// --- Job-related Imports ---
+import JobsPage from './components/jobs/JobsPage'; // Existing Job List Page
+import JobDetailsPage from './components/jobs/JobDetailsPage'; // <--- ADDED THIS IMPORT: Your new Job Details Page
 
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -101,12 +112,10 @@ const PrivateRoute = ({ children, roles }) => {
 };
 
 function AppContent() {
-    // Corrected: Destructure 'logout' from useAuth
     const { user, loading, logout } = useAuth();
     const location = useLocation();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-    // Determine if the sidebar should be shown at all
     const shouldRenderSidebar = user && !loading && ['admin', 'manager'].includes(user.role) &&
                                  !['/login', '/signup', '/forgot-password', '/quote-request'].includes(location.pathname) &&
                                  !location.pathname.startsWith('/forms/');
@@ -124,7 +133,6 @@ function AppContent() {
 
     const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
-    // Calculate margin based on whether a sidebar is rendered AND its open/collapsed state
     let mainContentMarginClass = 'ml-0';
     if (shouldRenderSidebar) {
         mainContentMarginClass = isSidebarOpen ? 'ml-64' : 'ml-20';
@@ -133,7 +141,6 @@ function AppContent() {
     return (
         <div className="flex h-screen bg-gray-50">
             {shouldRenderSidebar && (
-                // Pass toggleSidebar, user, and logout to the Sidebar component
                 <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} user={user} logout={logout} />
             )}
             <main className={`flex-1 overflow-auto transition-all duration-300 ease-in-out ${mainContentMarginClass}`}>
@@ -175,6 +182,11 @@ function AppContent() {
                         <Route path="/commission-report" element={<PrivateRoute roles={['admin', 'manager']}><CommissionReportPage /></PrivateRoute>} />
                         <Route path="/spot-checker" element={<PrivateRoute roles={['admin', 'manager', 'staff']}><SpotCheckerPage /></PrivateRoute>} />
 
+                        {/* Jobs Page and Job Details Page */}
+                        <Route path="/jobs" element={<PrivateRoute roles={['admin', 'manager', 'staff']}><JobsPage /></PrivateRoute>} />
+                        {/* NEW ROUTE FOR JOB DETAILS PAGE */}
+                        <Route path="/jobs/:jobId" element={<PrivateRoute roles={['admin', 'manager', 'staff', 'customer']}><JobDetailsPage /></PrivateRoute>} /> {/* <--- ADDED THIS ROUTE */}
+
                         {/* Default Route */}
                         <Route path="/" element={loading ? <div>Loading...</div> : <Navigate to={user ? getDefaultDashboardPath(user.role) : "/login"} replace />} />
                     </Routes>
@@ -185,17 +197,26 @@ function AppContent() {
 }
 
 function App() {
+    // Load your Stripe Publishable Key securely.
+    // Ensure REACT_APP_STRIPE_PUBLISHABLE_KEY is defined in your frontend/.env file.
+    const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
+
     return (
         <Router>
-            <AuthProvider>
-                <CurrencyProvider>
-                    <MapsApiProvider>
-                        <DndProvider backend={HTML5Backend}>
-                            <AppContent />
-                        </DndProvider>
-                    </MapsApiProvider>
-                </CurrencyProvider>
-            </AuthProvider>
+            <Suspense fallback={<div>Loading translations...</div>}>
+                <AuthProvider>
+                    <CurrencyProvider>
+                        <MapsApiProvider>
+                            <DndProvider backend={HTML5Backend}>
+                                {/* Wrap your AppContent with Stripe's Elements provider */}
+                                <Elements stripe={stripePromise}>
+                                    <AppContent />
+                                </Elements>
+                            </DndProvider>
+                        </MapsApiProvider>
+                    </CurrencyProvider>
+                </AuthProvider>
+            </Suspense>
         </Router>
     );
 }

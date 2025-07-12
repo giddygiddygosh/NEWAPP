@@ -6,11 +6,16 @@ import ModernSelect from '../common/ModernSelect';
 import AddressInput from '../common/AddressInput';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
+import { useTranslation } from 'react-i18next';
 
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, updateEmail } from 'firebase/auth';
-import { getCurrencySymbol } from '../../utils/helpers'; // Ensure this utility is available if used elsewhere
+import { getCurrencySymbol } from '../../utils/helpers';
+
+// Define default address outside the component to ensure its reference is stable
+const INITIAL_DEFAULT_ADDRESS = { street: '', city: '', county: '', postcode: '', country: '' };
 
 const SettingsPage = () => {
+    const { t, i18n } = useTranslation();
     const { user, loading: authLoading, auth } = useAuth();
     const { currency, loading: currencyLoading, error: currencyError, updateCurrency, formatCurrency } = useCurrency();
 
@@ -19,14 +24,12 @@ const SettingsPage = () => {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
     const [successMessage, setSuccessMessage] = useState(null);
-    const [activeTab, setActiveTab] = useState('company'); // Default to 'company' tab
-
-    const defaultAddress = useMemo(() => ({ street: '', city: '', county: '', postcode: '', country: '' }), []);
+    const [activeTab, setActiveTab] = useState('company');
 
     const [localSettings, setLocalSettings] = useState({
         companyName: '',
         companyLogoUrl: '',
-        companyAddress: defaultAddress,
+        companyAddress: INITIAL_DEFAULT_ADDRESS,
         companyPhone: '',
         companyEmail: '',
         companyWebsite: '',
@@ -50,7 +53,6 @@ const SettingsPage = () => {
         nextInvoiceSeqNumber: 1,
         defaultTaxRate: 0,
 
-        // Email Automation Settings in local state
         emailAutomation: {
             welcome_email: { enabled: true },
             appointment_reminder: { enabled: true, daysBefore: 1 },
@@ -109,64 +111,53 @@ const SettingsPage = () => {
                 const settingsRes = await api.get('/settings');
                 const fetchedSettings = settingsRes.data;
 
-                // --- DEBUG LOG: Initial fetched settings ---
-                console.log('--- SETTINGS PAGE: Initial fetchedSettings ---');
-                // CORRECTED: Access companyName from the nested 'company' object within 'settings'
-                console.log('Company Name:', fetchedSettings.settings?.company?.name); // Corrected access
-                console.log('Global Invoice Email Enabled:', fetchedSettings.settings?.emailAutomation?.invoice_email?.enabled); // Also corrected for consistency
-                console.log('--- END Initial fetchedSettings ---');
-                // --- END DEBUG LOG ---
-
                 const userProfileRes = await api.get('/auth/me');
                 const fetchedUserProfile = userProfileRes.data.user;
 
-                setSettings(fetchedSettings); // Store raw fetched settings for reference if needed
+                setSettings(fetchedSettings);
 
                 setLocalSettings(prev => ({
                     ...prev,
-                    // CORRECTED: Access companyName from the nested 'company' object within 'settings'
-                    companyName: fetchedSettings.settings?.company?.name || '', // Corrected access
-                    companyLogoUrl: fetchedSettings.settings?.companyLogoUrl || '', // Corrected access
-                    defaultFormName: fetchedSettings.settings?.defaultFormName || '', // Corrected access
-                    // These were already correctly accessing nested `company.settings`
-                    companyAddress: fetchedSettings.settings?.company?.settings?.address || defaultAddress,
+                    companyName: fetchedSettings.settings?.company?.name || '',
+                    companyLogoUrl: fetchedSettings.settings?.companyLogoUrl || '',
+                    defaultFormName: fetchedSettings.settings?.defaultFormName || '',
+                    companyAddress: fetchedSettings.settings?.company?.settings?.address || INITIAL_DEFAULT_ADDRESS,
                     companyPhone: fetchedSettings.settings?.company?.settings?.phone || '',
                     companyEmail: fetchedSettings.settings?.company?.settings?.email || '',
                     companyWebsite: fetchedSettings.settings?.company?.settings?.website || '',
                     companyTaxId: fetchedSettings.settings?.company?.settings?.taxId || '',
 
-                    backgroundColor: fetchedSettings.settings?.backgroundColor || '#FFFFFF', // Corrected access
-                    primaryColor: fetchedSettings.settings?.primaryColor || '#3B82F6', // Corrected access
-                    borderColor: fetchedSettings.settings?.borderColor || '#D1D5DB', // Corrected access
-                    labelColor: fetchedSettings.settings?.labelColor || '#111827', // Corrected access
-                    inputButtonBorderRadius: fetchedSettings.settings?.inputButtonBorderRadius || '0.375rem', // Corrected access
+                    backgroundColor: fetchedSettings.settings?.backgroundColor || '#FFFFFF',
+                    primaryColor: fetchedSettings.settings?.primaryColor || '#3B82F6',
+                    borderColor: fetchedSettings.settings?.borderColor || '#D1D5DB',
+                    labelColor: fetchedSettings.settings?.labelColor || '#111827',
+                    inputButtonBorderRadius: fetchedSettings.settings?.inputButtonBorderRadius || '0.375rem',
 
-                    defaultCurrencyCode: fetchedSettings.settings?.defaultCurrency?.code || 'GBP', // Corrected access
-                    defaultCurrencySymbol: fetchedSettings.settings?.defaultCurrency?.symbol || '£', // Corrected access
-                    defaultCurrencyDecimalPlaces: fetchedSettings.settings?.defaultCurrency?.decimalPlaces || 2, // Corrected access
-                    defaultCurrencyThousandSeparator: fetchedSettings.settings?.defaultCurrency?.thousandSeparator || ',', // Corrected access
-                    defaultCurrencyDecimalSeparator: fetchedSettings.settings?.defaultCurrency?.decimalSeparator || '.', // Corrected access
-                    defaultCurrencyFormatTemplate: fetchedSettings.settings?.defaultCurrency?.formatTemplate || '{symbol}{amount}', // Corrected access
+                    defaultCurrencyCode: fetchedSettings.settings?.defaultCurrency?.code || 'GBP',
+                    defaultCurrencySymbol: fetchedSettings.settings?.defaultCurrency?.symbol || '£',
+                    defaultCurrencyDecimalPlaces: fetchedSettings.settings?.defaultCurrency?.decimalPlaces || 2,
+                    defaultCurrencyThousandSeparator: fetchedSettings.settings?.defaultCurrency?.thousandSeparator || ',',
+                    defaultCurrencyDecimalSeparator: fetchedSettings.settings?.defaultCurrency?.decimalSeparator || '.',
+                    defaultCurrencyFormatTemplate: fetchedSettings.settings?.defaultCurrency?.formatTemplate || '{symbol}{amount}',
 
-                    invoicePrefix: fetchedSettings.settings?.invoiceSettings?.invoicePrefix || 'INV-', // Corrected access
-                    nextInvoiceSeqNumber: fetchedSettings.settings?.invoiceSettings?.nextInvoiceSeqNumber || 1, // Corrected access
-                    defaultTaxRate: fetchedSettings.settings?.invoiceSettings?.defaultTaxRate || 0, // Corrected access
+                    invoicePrefix: fetchedSettings.settings?.invoiceSettings?.invoicePrefix || 'INV-',
+                    nextInvoiceSeqNumber: fetchedSettings.settings?.invoiceSettings?.nextInvoiceSeqNumber || 1,
+                    defaultTaxRate: fetchedSettings.settings?.invoiceSettings?.defaultTaxRate || 0,
 
-                    // Populate emailAutomation from fetched settings
                     emailAutomation: {
-                        welcome_email: { enabled: fetchedSettings.settings?.emailAutomation?.welcome_email?.enabled ?? true }, // Corrected access
+                        welcome_email: { enabled: fetchedSettings.settings?.emailAutomation?.welcome_email?.enabled ?? true },
                         appointment_reminder: { 
-                            enabled: fetchedSettings.settings?.emailAutomation?.appointment_reminder?.enabled ?? true, // Corrected access
+                            enabled: fetchedSettings.settings?.emailAutomation?.appointment_reminder?.enabled ?? true,
                             daysBefore: fetchedSettings.settings?.emailAutomation?.appointment_reminder?.daysBefore ?? 1
                         },
-                        job_completion: { enabled: fetchedSettings.settings?.emailAutomation?.job_completion?.enabled ?? true }, // Corrected access
-                        invoice_email: { enabled: fetchedSettings.settings?.emailAutomation?.invoice_email?.enabled ?? true }, // Corrected access
+                        job_completion: { enabled: fetchedSettings.settings?.emailAutomation?.job_completion?.enabled ?? true },
+                        invoice_email: { enabled: fetchedSettings.settings?.emailAutomation?.invoice_email?.enabled ?? true },
                         invoice_reminder: { 
-                            enabled: fetchedSettings.settings?.emailAutomation?.invoice_reminder?.enabled ?? true, // Corrected access
+                            enabled: fetchedSettings.settings?.emailAutomation?.invoice_reminder?.enabled ?? true,
                             daysAfter: fetchedSettings.settings?.emailAutomation?.invoice_reminder?.daysAfter ?? 7
                         },
                         review_request: { 
-                            enabled: fetchedSettings.settings?.emailAutomation?.review_request?.enabled ?? true, // Corrected access
+                            enabled: fetchedSettings.settings?.emailAutomation?.review_request?.enabled ?? true,
                             daysAfter: fetchedSettings.settings?.emailAutomation?.review_request?.daysAfter ?? 3
                         },
                     },
@@ -178,21 +169,20 @@ const SettingsPage = () => {
                     email: fetchedUserProfile.email || '',
                 }));
 
-                // Corrected: Access companyLogoUrl from fetchedSettings.settings
                 if (fetchedSettings.settings?.companyLogoUrl) {
                     setLogoPreview(fetchedSettings.settings.companyLogoUrl);
                 }
 
             } catch (err) {
                 console.error('Error fetching settings or profile:', err.response?.data || err.message);
-                setError(err.response?.data?.message || 'Failed to load settings or profile data.');
+                setError(err.response?.data?.message || t('settingsPage.failedToLoadSettings'));
             } finally {
                 setLoading(false);
             }
         };
 
         fetchSettingsAndProfile();
-    }, [user, authLoading, defaultAddress]);
+    }, [user, authLoading, t]);
 
     const handleLocalSettingsChange = useCallback((e) => {
         const { name, value, type } = e.target;
@@ -240,7 +230,7 @@ const SettingsPage = () => {
         setLocalSettings(prev => ({
             ...prev,
             [name]: type === 'number' && name === 'defaultTaxRate' ? parseFloat(value) : 
-                     type === 'number' ? parseFloat(value) : value
+                            type === 'number' ? parseFloat(value) : value
         }));
     }, []);
     
@@ -273,7 +263,7 @@ const SettingsPage = () => {
         setSuccessMessage(null);
 
         if (user?.role !== 'admin') {
-            setError('You do not have permission to update company settings.');
+            setError(t('settingsPage.permissionError'));
             setSaving(false);
             return;
         }
@@ -291,7 +281,7 @@ const SettingsPage = () => {
                 uploadedLogoUrl = uploadRes.data.logoUrl;
             } catch (err) {
                 console.error('Error uploading logo:', err.response?.data || err.message);
-                setError(err.response?.data?.message || 'Failed to upload logo.');
+                setError(err.response?.data?.message || t('settingsPage.failedToUploadLogo'));
                 setSaving(false);
                 return;
             }
@@ -322,9 +312,8 @@ const SettingsPage = () => {
                     defaultTaxRate: localSettings.defaultTaxRate,
                 },
 
-                emailAutomation: localSettings.emailAutomation, // Send the full object as is from state
+                emailAutomation: localSettings.emailAutomation,
 
-                // These are for the Company model (passed as top-level fields for backend processing)
                 name: localSettings.companyName,
                 address: localSettings.companyAddress,
                 phone: localSettings.companyPhone,
@@ -333,33 +322,15 @@ const SettingsPage = () => {
                 taxId: localSettings.companyTaxId,
             };
 
-            // --- DEBUG LOG: Payload being sent from Settings page ---
-            console.log('--- SETTINGS PAGE: Payload being sent to backend ---');
-            console.log('Company Name (in payload):', payload.name);
-            console.log('Global Invoice Email Enabled (in payload):', payload.emailAutomation?.invoice_email?.enabled);
-            console.log('Full Payload:', payload);
-            console.log('--- END Settings Page Payload ---');
-            // --- END DEBUG LOG ---
-
             const res = await api.put('/settings', payload);
             
-            // --- DEBUG LOG: Response received from Settings page save ---
-            console.log('--- SETTINGS PAGE: Response received from backend after save ---');
-            console.log('Response Status:', res.status);
-            console.log('Response Data:', res.data);
-            console.log('Company Name (from response):', res.data.settings?.company?.name); // Access from nested 'company' object
-            console.log('Global Invoice Email Enabled (from response):', res.data.settings?.emailAutomation?.invoice_email?.enabled);
-            console.log('--- END Settings Page Response ---');
-            // --- END DEBUG LOG ---
-
-            setSettings(res.data.settings); // Update the main settings state with the full response
+            setSettings(res.data.settings);
 
             setLocalSettings(prev => ({
                 ...prev,
                 companyLogoUrl: uploadedLogoUrl,
-                // CORRECTED: Access companyName from the nested 'company' object
-                companyName: res.data.settings.company?.name || '', // Access from nested 'company' object
-                companyAddress: res.data.settings.company?.settings?.address || defaultAddress,
+                companyName: res.data.settings.company?.name || '',
+                companyAddress: res.data.settings.company?.settings?.address || INITIAL_DEFAULT_ADDRESS,
                 companyPhone: res.data.settings.company?.settings?.phone || '',
                 companyEmail: res.data.settings.company?.settings?.email || '',
                 companyWebsite: res.data.settings.company?.settings?.website || '',
@@ -369,7 +340,6 @@ const SettingsPage = () => {
                 nextInvoiceSeqNumber: res.data.settings.invoiceSettings?.nextInvoiceSeqNumber || 1,
                 defaultTaxRate: res.data.settings.invoiceSettings?.defaultTaxRate || 0,
 
-                // Update local state with saved emailAutomation settings from response
                 emailAutomation: {
                     welcome_email: { enabled: res.data.settings.emailAutomation?.welcome_email?.enabled ?? true },
                     appointment_reminder: { 
@@ -388,26 +358,17 @@ const SettingsPage = () => {
                     },
                 },
             }));
-            setSuccessMessage('Company Settings updated successfully!');
+            setSuccessMessage(t('settingsPage.companySettingsUpdated'));
             setLogoFile(null);
 
             if (user && user.setUserData) {
-                // CORRECTED: Access companyName from the nested 'company' object
                 user.setUserData(prev => ({ ...prev, company: { ...prev.company, name: res.data.settings.company?.name } }));
             }
             updateCurrency(res.data.settings.defaultCurrency);
 
         } catch (err) {
-            // --- DEBUG LOG: Error during Settings page save ---
-            console.error('--- SETTINGS PAGE: Error during save ---');
-            console.error('Error object:', err);
-            console.error('Error response data:', err.response?.data);
-            console.error('Error message:', err.message);
-            console.error('--- END Settings Page Error ---');
-            // --- END DEBUG LOG ---
-
             console.error('Error saving company settings:', err.response?.data || err.message);
-            setError(err.response?.data?.message || 'Failed to save company settings. Please try again.');
+            setError(err.response?.data?.message || t('settingsPage.failedToSaveCompanySettings'));
         } finally {
             setSaving(false);
         }
@@ -421,13 +382,13 @@ const SettingsPage = () => {
 
         try {
             const res = await api.put('/auth/profile', { contactPersonName: userProfile.contactPersonName });
-            setSuccessMessage('Profile updated successfully!');
+            setSuccessMessage(t('settingsPage.profileUpdated'));
             if (user && user.setUserData) {
                 user.setUserData(prev => ({ ...prev, contactPersonName: res.data.user.contactPersonName }));
             }
         } catch (err) {
             console.error('Error saving profile:', err.response?.data || err.message);
-            setError(err.response?.data?.message || 'Failed to save profile. Please try again.');
+            setError(err.response?.data?.message || t('settingsPage.failedToSaveProfile'));
         } finally {
             setSaving(false);
         }
@@ -442,17 +403,17 @@ const SettingsPage = () => {
         const { currentPassword, newPassword, confirmNewPassword } = userProfile;
 
         if (!currentPassword || !newPassword || !confirmNewPassword) {
-            setError('All password fields are required.');
+            setError(t('settingsPage.allPasswordFieldsRequired'));
             setSaving(false);
             return;
         }
         if (newPassword !== confirmNewPassword) {
-            setError('New password and confirm password do not match.');
+            setError(t('settingsPage.passwordsMismatch'));
             setSaving(false);
             return;
         }
         if (newPassword.length < 6) {
-            setError('New password must be at least 6 characters long.');
+            setError(t('settingsPage.passwordMinLength'));
             setSaving(false);
             return;
         }
@@ -460,7 +421,7 @@ const SettingsPage = () => {
         try {
             const currentUser = auth.currentUser;
             if (!currentUser) {
-                setError('No authenticated user found. Please log in again.');
+                setError(t('settingsPage.noAuthenticatedUser'));
                 setSaving(false);
                 return;
             }
@@ -469,22 +430,22 @@ const SettingsPage = () => {
             await reauthenticateWithCredential(currentUser, credential);
             await updatePassword(currentUser, newPassword);
 
-            setSuccessMessage('Password changed successfully! You may need to log in again shortly.');
+            setSuccessMessage(t('settingsPage.passwordChangeSuccess'));
             setUserProfile(prev => ({ ...prev, currentPassword: '', newPassword: '', confirmNewPassword: '' }));
 
         } catch (err) {
             console.error('Error changing password:', err);
-            let errorMessage = 'Failed to change password. Please ensure your current password is correct.';
+            let errorMessage = t('settingsPage.failedToChangePassword');
             if (err.code === 'auth/wrong-password') {
-                errorMessage = 'Incorrect current password.';
+                errorMessage = t('settingsPage.incorrectCurrentPassword');
             } else if (err.code === 'auth/requires-recent-login') {
-                errorMessage = 'Your session has expired. Please log out and log back in, then try changing your password again.';
+                errorMessage = t('settingsPage.sessionExpired');
             } else if (err.code === 'auth/weak-password') {
-                errorMessage = 'New password is too weak. Please choose a stronger password.';
+                errorMessage = t('settingsPage.weakPassword');
             } else if (err.code === 'auth/network-request-failed') {
-                errorMessage = 'Network error. Please check your internet connection.';
+                errorMessage = t('settingsPage.networkError');
             } else if (err.code === 'auth/operation-not-allowed') {
-                errorMessage = 'Email change operation not allowed. This could be due to a temporary issue or specific Firebase project settings. Please try again or contact support.';
+                errorMessage = t('settingsPage.operationNotAllowed');
             }
             setError(errorMessage);
         } finally {
@@ -501,12 +462,12 @@ const SettingsPage = () => {
         const { newEmail, currentPassword } = userProfile;
 
         if (!newEmail || !currentPassword) {
-            setError('New email and current password are required.');
+            setError(t('settingsPage.newEmailPasswordRequired'));
             setSaving(false);
             return;
         }
         if (newEmail === user.email) {
-            setError('New email cannot be the same as the current email.');
+            setError(t('settingsPage.emailSameAsCurrent'));
             setSaving(false);
             return;
         }
@@ -514,7 +475,7 @@ const SettingsPage = () => {
         try {
             const currentUser = auth.currentUser;
             if (!currentUser) {
-                setError('No authenticated user found. Please log in again.');
+                setError(t('settingsPage.noAuthenticatedUser'));
                 setSaving(false);
                 return;
             }
@@ -525,29 +486,26 @@ const SettingsPage = () => {
             await updateEmail(currentUser, newEmail);
 
             setSuccessMessage(
-                'Email change initiated! A verification email has been sent to your NEW email address (' +
-                newEmail +
-                '). Please click the link in that email to complete the change. ' +
-                'You may need to log in again with your new email after verification.'
+                t('settingsPage.emailChangeVerificationSent', { newEmail: newEmail })
             );
 
             setUserProfile(prev => ({ ...prev, newEmail: '', currentPassword: '' }));
 
         } catch (err) {
             console.error('Error changing email:', err);
-            let errorMessage = 'Failed to change email address.';
+            let errorMessage = t('settingsPage.failedToChangeEmail');
             if (err.code === 'auth/invalid-email') {
-                errorMessage = 'The new email address is not valid.';
+                errorMessage = t('settingsPage.invalidNewEmail');
             } else if (err.code === 'auth/email-already-in-use') {
-                errorMessage = 'This email address is already in use by another account.';
+                errorMessage = t('settingsPage.emailAlreadyInUse');
             } else if (err.code === 'auth/wrong-password') {
-                errorMessage = 'Incorrect current password provided for email change.';
+                errorMessage = t('settingsPage.incorrectCurrentPasswordForEmail');
             } else if (err.code === 'auth/requires-recent-login') {
-                errorMessage = 'Your session has expired. Please log out and log back in, then try changing your email again.';
+                errorMessage = t('settingsPage.sessionExpired');
             } else if (err.code === 'auth/network-request-failed') {
-                errorMessage = 'Network error. Please check your internet connection.';
+                errorMessage = t('settingsPage.networkError');
             } else if (err.code === 'auth/operation-not-allowed') {
-                errorMessage = 'Email change operation not allowed. This could be due to a temporary issue or specific Firebase project settings. Please try again or contact support.';
+                errorMessage = t('settingsPage.operationNotAllowed');
             }
             setError(errorMessage);
         } finally {
@@ -570,7 +528,8 @@ const SettingsPage = () => {
 
     return (
         <div className="p-8 bg-white rounded-xl shadow-lg max-w-4xl mx-auto">
-            <h1 className="text-3xl font-bold text-gray-900 mb-6 border-b pb-4">Company Settings</h1>
+            {/* Translated Page Title */}
+            <h1 className="text-3xl font-bold text-gray-900 mb-6 border-b pb-4">{t('settingsPage.companySettingsTitle')}</h1>
 
             {displayError && (
                 <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
@@ -592,7 +551,7 @@ const SettingsPage = () => {
                         className={`${activeTab === 'company' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
                         disabled={!canAccessCompanyCurrencySettings}
                     >
-                        Company Details
+                        {t('settingsPage.companyDetailsTab')}
                     </button>
                     <button
                         type="button"
@@ -600,14 +559,21 @@ const SettingsPage = () => {
                         className={`${activeTab === 'currency' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
                         disabled={!canAccessCompanyCurrencySettings}
                     >
-                        Currency Preferences
+                        {t('settingsPage.currencyPreferencesTab')}
                     </button>
                     <button
                         type="button"
                         onClick={() => setActiveTab('my-account')}
                         className={`${activeTab === 'my-account' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
                     >
-                        My Account
+                        {t('settingsPage.myAccountTab')}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('language')}
+                        className={`${activeTab === 'language' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                    >
+                        {t('settingsPage.languageTab')}
                     </button>
                 </nav>
             </div>
@@ -615,10 +581,10 @@ const SettingsPage = () => {
             {/* Tab Content: Company Details */}
             {activeTab === 'company' && (
                 <form onSubmit={handleSaveCompanySettings} className="space-y-6">
-                    <h3 className="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Company Profile</h3>
+                    <h3 className="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">{t('settingsPage.companyProfileSection')}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <ModernInput
-                            label="Company Name"
+                            label={t('settingsPage.companyNameLabel')}
                             name="companyName"
                             value={localSettings.companyName}
                             onChange={handleLocalSettingsChange}
@@ -626,10 +592,10 @@ const SettingsPage = () => {
                         />
 
                         <div className="col-span-1">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Company Logo</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">{t('settingsPage.companyLogoLabel')}</label>
                             <div className="mt-1 flex items-center">
                                 {(logoPreview || localSettings.companyLogoUrl) ? (
-                                    <img src={logoPreview || localSettings.companyLogoUrl} alt="Company Logo" className="h-20 w-20 object-contain rounded-full border border-gray-200 p-1 mr-4" />
+                                    <img src={logoPreview || localSettings.companyLogoUrl} alt={t('settingsPage.companyLogoAlt')} className="h-20 w-20 object-contain rounded-full border border-gray-200 p-1 mr-4" />
                                 ) : (
                                     <span className="inline-block h-20 w-20 rounded-full overflow-hidden bg-gray-100">
                                         <svg className="h-full w-full text-gray-300" fill="currentColor" viewBox="0 0 24 24">
@@ -649,24 +615,24 @@ const SettingsPage = () => {
                                     htmlFor="logo-upload"
                                     className="ml-5 bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer"
                                 >
-                                    Change
+                                    {t('settingsPage.changeButton')}
                                 </label>
                             </div>
-                            <p className="mt-1 text-sm text-gray-500">Upload a logo (max 5MB, PNG, JPG, GIF)</p>
+                            <p className="mt-1 text-sm text-gray-500">{t('settingsPage.logoUploadHelpText')}</p>
                         </div>
                     </div>
 
-                    <h3 className="text-xl font-semibold text-gray-800 mt-4 border-b pb-3 mb-4">Contact Information</h3>
+                    <h3 className="text-xl font-semibold text-gray-800 mt-4 border-b pb-3 mb-4">{t('settingsPage.contactInformationSection')}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <ModernInput
-                            label="Company Phone"
+                            label={t('settingsPage.companyPhoneLabel')}
                             name="companyPhone"
                             value={localSettings.companyPhone}
                             onChange={handleLocalSettingsChange}
                             type="tel"
                         />
                         <ModernInput
-                            label="Company Email"
+                            label={t('settingsPage.companyEmailLabel')}
                             name="companyEmail"
                             value={localSettings.companyEmail}
                             onChange={handleLocalSettingsChange}
@@ -674,69 +640,69 @@ const SettingsPage = () => {
                         />
                         <div className="md:col-span-2">
                             <ModernInput
-                                label="Company Website"
+                                label={t('settingsPage.companyWebsiteLabel')}
                                 name="companyWebsite"
                                 value={localSettings.companyWebsite}
                                 onChange={handleLocalSettingsChange}
                                 type="url"
-                                placeholder="https://yourcompany.com"
+                                placeholder={t('settingsPage.companyWebsitePlaceholder')}
                             />
                         </div>
                     </div>
 
-                    <h3 className="text-xl font-semibold text-gray-800 mt-4 border-b pb-3 mb-4">Address Details</h3>
+                    <h3 className="text-xl font-semibold text-gray-800 mt-4 border-b pb-3 mb-4">{t('settingsPage.addressDetailsSection')}</h3>
                     <AddressInput
-                        label="Company Address"
+                        label={t('settingsPage.companyAddressLabel')}
                         address={localSettings.companyAddress}
                         onChange={handleCompanyAddressChange}
                         fieldName="companyAddress"
                     />
 
                     <ModernInput
-                        label="Tax / Business ID (e.g., VAT Number)"
+                        label={t('settingsPage.taxIdLabel')}
                         name="companyTaxId"
                         value={localSettings.companyTaxId}
                         onChange={handleLocalSettingsChange}
-                        placeholder="e.g., GB123456789"
+                        placeholder={t('settingsPage.taxIdPlaceholder')}
                     />
 
                     {/* NEW: Invoice Settings Section */}
-                    <h3 className="text-xl font-semibold text-gray-800 mt-4 border-b pb-3 mb-4">Invoice Settings</h3>
+                    <h3 className="text-xl font-semibold text-gray-800 mt-4 border-b pb-3 mb-4">{t('settingsPage.invoiceSettingsSection')}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <ModernInput
-                            label="Invoice Prefix"
+                            label={t('settingsPage.invoicePrefixLabel')}
                             name="invoicePrefix"
                             value={localSettings.invoicePrefix}
                             onChange={handleInvoiceSettingsChange}
-                            helpText="e.g., INV- will result in INV-0001"
+                            helpText={t('settingsPage.invoicePrefixHelpText')}
                         />
                         <ModernInput
-                            label="Next Invoice Number"
+                            label={t('settingsPage.nextInvoiceNumberLabel')}
                             name="nextInvoiceSeqNumber"
                             value={localSettings.nextInvoiceSeqNumber}
                             onChange={handleInvoiceSettingsChange}
                             type="number"
                             min="1"
-                            helpText="The next sequential number to use for invoices (e.g., 1 for INV-0001)."
+                            helpText={t('settingsPage.nextInvoiceNumberHelpText')}
                         />
                         <ModernInput
-                            label="Default Tax Rate (%)"
+                            label={t('settingsPage.defaultTaxRateLabel')}
                             name="defaultTaxRate"
-                            value={localSettings.defaultTaxRate * 100} // Display as percentage (e.g., 20 instead of 0.2)
+                            value={localSettings.defaultTaxRate * 100}
                             onChange={(e) => {
                                 const value = parseFloat(e.target.value);
-                                handleInvoiceSettingsChange({ target: { name: 'defaultTaxRate', value: value / 100 } }); // Store as 0.XX
+                                handleInvoiceSettingsChange({ target: { name: 'defaultTaxRate', value: value / 100 } });
                             }}
                             type="number"
                             min="0"
                             max="100"
                             step="0.01"
-                            helpText="Enter the default tax rate as a percentage (e.g., 20 for 20% VAT)."
+                            helpText={t('settingsPage.defaultTaxRateHelpText')}
                         />
                     </div>
 
-                    {/* NEW: Email Automation Settings Section - Re-added as per user request */}
-                    <h3 className="text-xl font-semibold text-gray-800 mt-4 border-b pb-3 mb-4">Email Automation Settings</h3>
+                    {/* NEW: Email Automation Settings Section */}
+                    <h3 className="text-xl font-semibold text-gray-800 mt-4 border-b pb-3 mb-4">{t('settingsPage.emailAutomationSection')}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Welcome Email */}
                         <div className="col-span-1 flex items-center">
@@ -748,9 +714,9 @@ const SettingsPage = () => {
                                     onChange={handleEmailAutomationChange}
                                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                                 />
-                                <span>Enable Welcome Email</span>
+                                <span>{t('settingsPage.enableWelcomeEmail')}</span>
                             </label>
-                            <p className="ml-4 text-sm text-gray-500">(Sent on user/client creation)</p>
+                            <p className="ml-4 text-sm text-gray-500">{t('settingsPage.welcomeEmailHelpText')}</p>
                         </div>
 
                         {/* Invoice Email */}
@@ -763,9 +729,9 @@ const SettingsPage = () => {
                                     onChange={handleEmailAutomationChange}
                                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                                 />
-                                <span>Enable Invoice Emails</span>
+                                <span>{t('settingsPage.enableInvoiceEmails')}</span>
                             </label>
-                            <p className="ml-4 text-sm text-gray-500">(Sent when an invoice is created/sent)</p>
+                            <p className="ml-4 text-sm text-gray-500">{t('settingsPage.invoiceEmailHelpText')}</p>
                         </div>
 
                         {/* Appointment Reminder */}
@@ -778,18 +744,18 @@ const SettingsPage = () => {
                                     onChange={handleEmailAutomationChange}
                                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                                 />
-                                <span>Enable Appointment Reminders</span>
+                                <span>{t('settingsPage.enableAppointmentReminders')}</span>
                             </label>
                             {localSettings.emailAutomation.appointment_reminder.enabled && (
                                 <ModernInput
-                                    label="Days Before Appointment"
+                                    label={t('settingsPage.daysBeforeAppointmentLabel')}
                                     name="appointment_reminder.daysBefore"
                                     type="number"
                                     value={localSettings.emailAutomation.appointment_reminder.daysBefore}
                                     onChange={handleEmailAutomationChange}
                                     min="0"
                                     className="mt-2"
-                                    helpText="Send reminder this many days before the appointment."
+                                    helpText={t('settingsPage.daysBeforeAppointmentHelpText')}
                                 />
                             )}
                         </div>
@@ -804,9 +770,9 @@ const SettingsPage = () => {
                                     onChange={handleEmailAutomationChange}
                                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                                 />
-                                <span>Enable Job Completion Emails</span>
+                                <span>{t('settingsPage.enableJobCompletionEmails')}</span>
                             </label>
-                            <p className="ml-4 text-sm text-gray-500">(Sent when a job is marked complete)</p>
+                            <p className="ml-4 text-sm text-gray-500">{t('settingsPage.jobCompletionEmailHelpText')}</p>
                         </div>
 
                         {/* Invoice Reminder */}
@@ -819,20 +785,20 @@ const SettingsPage = () => {
                                     onChange={handleEmailAutomationChange}
                                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                                 />
-                                <span>Enable Invoice Reminders</span>
+                                <span>{t('settingsPage.enableInvoiceReminders')}</span>
                             </label>
                             {localSettings.emailAutomation.invoice_reminder.enabled && (
                                 <ModernInput
-                                    label="Days After Due Date"
+                                    label={t('settingsPage.daysAfterDueDateLabel')}
                                     name="invoice_reminder.daysAfter"
                                     type="number"
                                     value={localSettings.emailAutomation.invoice_reminder.daysAfter}
                                     onChange={handleEmailAutomationChange}
                                     min="0"
                                     required
-                                    placeholder="e.g., 7 days"
+                                    placeholder={t('settingsPage.daysAfterDueDatePlaceholder')}
                                     className="mt-2"
-                                    helpText="Send reminder this many days after invoice due date."
+                                    helpText={t('settingsPage.daysAfterDueDateHelpText')}
                                 />
                             )}
                         </div>
@@ -847,20 +813,20 @@ const SettingsPage = () => {
                                     onChange={handleEmailAutomationChange}
                                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                                 />
-                                <span>Enable Review Requests</span>
+                                <span>{t('settingsPage.enableReviewRequests')}</span>
                             </label>
                             {localSettings.emailAutomation.review_request.enabled && (
                                 <ModernInput
-                                    label="Days After Job Completion"
+                                    label={t('settingsPage.daysAfterJobCompletionLabel')}
                                     name="review_request.daysAfter"
                                     type="number"
                                     value={localSettings.emailAutomation.review_request.daysAfter}
                                     onChange={handleEmailAutomationChange}
                                     min="0"
                                     required
-                                    placeholder="e.g., 3 days"
+                                    placeholder={t('settingsPage.daysAfterJobCompletionPlaceholder')}
                                     className="mt-2"
-                                    helpText="Send review request this many days after job completion."
+                                    helpText={t('settingsPage.daysAfterJobCompletionHelpText')}
                                 />
                             )}
                         </div>
@@ -873,7 +839,7 @@ const SettingsPage = () => {
                             className="px-8 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled={saving}
                         >
-                            {saving ? 'Saving...' : 'Save Changes'}
+                            {saving ? t('common.saving') : t('common.saveChanges')}
                         </button>
                     </div>
                 </form>
@@ -882,28 +848,28 @@ const SettingsPage = () => {
             {/* Tab Content: Currency Preferences */}
             {activeTab === 'currency' && (
                 <form onSubmit={handleSaveCompanySettings} className="p-6 border rounded-lg bg-gray-50/80 space-y-6">
-                    <h3 className="text-xl font-semibold text-gray-800 mb-4 border-b pb-3">Currency Preferences</h3>
+                    <h3 className="text-xl font-semibold text-gray-800 mb-4 border-b pb-3">{t('settingsPage.currencyPreferencesSection')}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <ModernSelect
-                            label="Currency Code"
+                            label={t('settingsPage.currencyCodeLabel')}
                             name="defaultCurrencyCode"
                             value={localSettings.defaultCurrencyCode}
                             onChange={handleCurrencyChange}
                             options={currencyOptions}
-                            helpText="The 3-letter ISO code for your primary currency (e.g., GBP, USD)."
+                            helpText={t('settingsPage.currencyCodeHelpText')}
                             disabled={currencyLoading}
                         />
                         <ModernInput
-                            label="Currency Symbol"
+                            label={t('settingsPage.currencySymbolLabel')}
                             name="defaultCurrencySymbol"
                             value={localSettings.defaultCurrencySymbol}
                             onChange={handleCurrencyChange}
-                            placeholder="e.g., £, $, €"
+                            placeholder={t('settingsPage.currencySymbolPlaceholder')}
                             required
-                            helpText="The symbol to display before/after amounts."
+                            helpText={t('settingsPage.currencySymbolHelpText')}
                         />
                         <ModernInput
-                            label="Decimal Places"
+                            label={t('settingsPage.decimalPlacesLabel')}
                             name="defaultCurrencyDecimalPlaces"
                             type="number"
                             value={localSettings.defaultCurrencyDecimalPlaces}
@@ -911,41 +877,41 @@ const SettingsPage = () => {
                             required
                             min="0"
                             max="4"
-                            helpText="Number of digits after the decimal point (e.g., 2 for 1.99)."
+                            helpText={t('settingsPage.decimalPlacesHelpText')}
                         />
                         <ModernInput
-                            label="Thousand Separator"
+                            label={t('settingsPage.thousandSeparatorLabel')}
                             name="defaultCurrencyThousandSeparator"
                             value={localSettings.defaultCurrencyThousandSeparator}
                             onChange={handleCurrencyChange}
-                            placeholder="e.g., ',' or '.'"
-                            helpText="Character used to separate thousands (e.g., 1,000)."
+                            placeholder={t('settingsPage.thousandSeparatorPlaceholder')}
+                            helpText={t('settingsPage.thousandSeparatorHelpText')}
                         />
                         <ModernInput
-                            label="Decimal Separator"
+                            label={t('settingsPage.decimalSeparatorLabel')}
                             name="defaultCurrencyDecimalSeparator"
                             value={localSettings.defaultCurrencyDecimalSeparator}
                             onChange={handleCurrencyChange}
-                            placeholder="e.g., '.' or ','"
+                            placeholder={t('settingsPage.decimalSeparatorPlaceholder')}
                             required
-                            helpText="Character used to separate whole numbers from fractions (e.g., 1.99)."
+                            helpText={t('settingsPage.decimalSeparatorHelpText')}
                         />
                         <ModernInput
-                            label="Format Template"
+                            label={t('settingsPage.formatTemplateLabel')}
                             name="defaultCurrencyFormatTemplate"
                             value={localSettings.defaultCurrencyFormatTemplate}
                             onChange={handleCurrencyChange}
-                            placeholder="{symbol}{amount}"
+                            placeholder={t('settingsPage.formatTemplatePlaceholder')}
                             required
-                            helpText="Use {symbol} for currency symbol, {amount} for number, {code} for currency code. E.g., {symbol}{amount} or {amount} {code}"
+                            helpText={t('settingsPage.formatTemplateHelpText')}
                         />
                         <div className="md:col-span-2 p-3 bg-blue-50 border border-blue-200 rounded-md text-blue-800">
-                            <strong>Preview:</strong> {formatCurrency(1234.56)} {/* Uses formatCurrency from context */}
+                            <strong>{t('settingsPage.previewLabel')}:</strong> {formatCurrency(1234.56)}
                         </div>
                     </div>
                     <div className="flex justify-end mt-6">
                         <button type="submit" className="px-8 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-semibold shadow-lg transition-colors duration-200" disabled={saving}>
-                            {saving ? 'Saving...' : 'Save Changes'}
+                            {saving ? t('common.saving') : t('common.saveChanges')}
                         </button>
                     </div>
                 </form>
@@ -955,22 +921,22 @@ const SettingsPage = () => {
             {activeTab === 'my-account' && (
                 <div className="space-y-8">
                     <form onSubmit={handleSaveProfile} className="p-6 border border-gray-200 rounded-lg shadow-sm space-y-4">
-                        <h3 className="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">My Profile Details</h3>
+                        <h3 className="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">{t('settingsPage.myProfileDetailsSection')}</h3>
                         <ModernInput
-                            label="Name"
+                            label={t('settingsPage.nameLabel')}
                             name="contactPersonName"
                             value={userProfile.contactPersonName}
                             onChange={handleUserProfileChange}
                             required
                         />
                         <ModernInput
-                            label="Email"
+                            label={t('settingsPage.emailLabel')}
                             name="email"
                             value={userProfile.email}
                             onChange={handleUserProfileChange}
                             disabled
                             readOnly={true}
-                            helpText="Your email address (managed by login provider)."
+                            helpText={t('settingsPage.emailHelpText')}
                         />
                         <div className="text-right">
                             <button
@@ -978,31 +944,31 @@ const SettingsPage = () => {
                                 className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-semibold"
                                 disabled={saving}
                             >
-                                {saving ? 'Updating...' : 'Update Profile'}
+                                {saving ? t('common.updating') : t('settingsPage.updateProfileButton')}
                             </button>
                         </div>
                     </form>
 
                     <form onSubmit={handleChangeEmail} className="p-6 border border-gray-200 rounded-lg shadow-sm space-y-4">
-                        <h3 className="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Change Email Address</h3>
+                        <h3 className="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">{t('settingsPage.changeEmailAddressSection')}</h3>
                         <ModernInput
-                            label="New Email Address"
+                            label={t('settingsPage.newEmailAddressLabel')}
                             name="newEmail"
                             type="email"
                             value={userProfile.newEmail}
                             onChange={handleUserProfileChange}
                             required
-                            placeholder="Enter your new email"
+                            placeholder={t('settingsPage.newEmailAddressPlaceholder')}
                             autoComplete="off"
                         />
                         <ModernInput
-                            label="Current Password (to confirm change)"
+                            label={t('settingsPage.currentPasswordLabel')}
                             name="currentPassword"
                             type="password"
                             value={userProfile.currentPassword}
                             onChange={handleUserProfileChange}
                             required
-                            placeholder="Enter your current password"
+                            placeholder={t('settingsPage.currentPasswordPlaceholder')}
                             autoComplete="off"
                         />
                         <div className="text-right">
@@ -1011,15 +977,15 @@ const SettingsPage = () => {
                                 className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-semibold"
                                 disabled={saving}
                             >
-                                {saving ? 'Changing Email...' : 'Change Email'}
+                                {saving ? t('common.changingEmail') : t('settingsPage.changeEmailButton')}
                             </button>
                         </div>
                     </form>
 
                     <form onSubmit={handleChangePassword} className="p-6 border border-gray-200 rounded-lg shadow-sm space-y-4">
-                        <h3 className="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Change Password</h3>
+                        <h3 className="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">{t('settingsPage.changePasswordSection')}</h3>
                         <ModernInput
-                            label="Current Password"
+                            label={t('settingsPage.currentPasswordLabel')}
                             name="currentPassword"
                             type="password"
                             value={userProfile.currentPassword}
@@ -1028,17 +994,17 @@ const SettingsPage = () => {
                             autoComplete="off"
                         />
                         <ModernInput
-                            label="New Password"
+                            label={t('settingsPage.newPasswordLabel')}
                             name="newPassword"
                             type="password"
                             value={userProfile.newPassword}
                             onChange={handleUserProfileChange}
                             required
-                            helpText="Minimum 6 characters."
+                            helpText={t('settingsPage.passwordMinLengthHelpText')}
                             autoComplete="new-password"
                         />
                         <ModernInput
-                            label="Confirm New Password"
+                            label={t('settingsPage.confirmNewPasswordLabel')}
                             name="confirmNewPassword"
                             type="password"
                             value={userProfile.confirmNewPassword}
@@ -1052,26 +1018,50 @@ const SettingsPage = () => {
                                 className="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 font-semibold"
                                 disabled={saving}
                             >
-                                {saving ? 'Changing...' : 'Change Password'}
+                                {saving ? t('common.changing') : t('settingsPage.changePasswordButton')}
                             </button>
                         </div>
                     </form>
 
                     <div className="p-6 border border-gray-200 rounded-lg shadow-sm space-y-4 bg-gray-50">
-                        <h3 className="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Two-Factor Authentication (2FA)</h3>
+                        <h3 className="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">{t('settingsPage.twoFactorAuthSection')}</h3>
                         <p className="text-gray-700">
-                            Enhance your account security with 2FA. This feature requires you to enter a code from your phone in addition to your password when logging in.
+                            {t('settingsPage.twoFactorAuthDescription')}
                         </p>
                         <p className="text-sm text-gray-500">
-                            (Full 2FA setup and management functionality will be available in a future update.)
+                            {t('settingsPage.twoFactorAuthComingSoon')}
                         </p>
                         <button
                             type="button"
                             className="px-6 py-2 bg-gray-400 text-white rounded-md cursor-not-allowed"
                             disabled
                         >
-                            Enable 2FA (Coming Soon)
+                            {t('settingsPage.enableTwoFactorAuthButton')}
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* NEW TAB CONTENT: Language Preferences */}
+            {activeTab === 'language' && (
+                <div className="p-6 border rounded-lg bg-gray-50/80 space-y-6">
+                    <h3 className="text-xl font-semibold text-gray-800 mb-4 border-b pb-3">{t('settingsPage.languagePreferencesSection')}</h3>
+                    <div className="grid grid-cols-1 gap-4">
+                        <ModernSelect
+                            label={t('settingsPage.selectLanguageLabel')}
+                            name="languageSelector"
+                            value={i18n.language}
+                            onChange={(e) => i18n.changeLanguage(e.target.value)}
+                            options={[
+                                { value: 'en', label: t('languages.en') }, // <--- UPDATED: Use t() for label
+                                { value: 'fr', label: t('languages.fr') }, // <--- UPDATED: Use t() for label
+                                { value: 'fil', label: t('languages.fil') }, // <--- ADDED: Filipino option
+                            ]}
+                            helpText={t('settingsPage.languageChangeHelpText')}
+                        />
+                    </div>
+                    <div className="text-sm text-gray-600">
+                        <p>{t('settingsPage.currentLanguageMessage', { lang: t(`languages.${i18n.language}`) || i18n.language })}</p>
                     </div>
                 </div>
             )}

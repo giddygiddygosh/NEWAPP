@@ -16,6 +16,8 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
         recurring: { pattern: 'none', endDate: '' }, createdBy: null,
         usedStockItems: [],
         price: 0,
+        // NEW FIELD: depositRequired
+        depositRequired: 0, // Initialize depositRequired
         formTemplate: '',
     });
     const [saving, setSaving] = useState(false);
@@ -78,33 +80,29 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
 
     useEffect(() => {
         if (isOpen) {
-            // --- FIX START: This function is now timezone-safe ---
             const formatForDateInput = (dateInput) => {
                 if (!dateInput) return '';
-                // If it's already a 'YYYY-MM-DD' string from the parent, just use it.
                 if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
                     return dateInput;
                 }
                 const d = new Date(dateInput);
                 if (isNaN(d.getTime())) return '';
-                
-                // Manually build the string from local date parts to avoid timezone shifts.
+
                 const year = d.getFullYear();
                 const month = String(d.getMonth() + 1).padStart(2, '0');
                 const day = String(d.getDate()).padStart(2, '0');
                 return `${year}-${month}-${day}`;
             };
-            // --- FIX END ---
 
             const initialCustomer = jobData ? customers.find(c => c._id === (jobData.customer?._id || jobData.customer)) : null;
             setSelectedCustomerDetails(initialCustomer);
-            
+
             let pattern = 'none', recurringEndDate = '', multiDayEndDate = '';
             if (jobData) {
                 if (jobData.recurring && typeof jobData.recurring === 'object') {
                     pattern = jobData.recurring.pattern || 'none';
                     recurringEndDate = formatForDateInput(jobData.recurring.endDate);
-                } else if (jobData.recurrence) {
+                } else if (jobData.recurrence) { // Fallback for old recurrence field
                     pattern = jobData.recurrence;
                     recurringEndDate = formatForDateInput(jobData.endDate);
                 }
@@ -112,18 +110,17 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
                     multiDayEndDate = formatForDateInput(jobData.endDate);
                 }
             }
-            
+
             const effectiveJobData = jobData || {};
 
             setFormData({
                 customer: effectiveJobData.customer?._id || effectiveJobData.customer || '',
                 serviceType: effectiveJobData.serviceType || '',
                 description: effectiveJobData.description || '',
-                // --- FIX: Use today's date as a fallback for new jobs ---
                 date: formatForDateInput(effectiveJobData.date || new Date()),
                 time: effectiveJobData.time || '',
                 duration: effectiveJobData.duration || 60,
-                assignedStaff: effectiveJobData.assignedStaff || [],
+                assignedStaff: effectiveJobData.staff || [], // Note: using jobData.staff here
                 status: effectiveJobData.status || 'Booked',
                 address: effectiveJobData.address || initialCustomer?.address || {},
                 notes: effectiveJobData.notes || '',
@@ -132,16 +129,18 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
                 createdBy: effectiveJobData.createdBy || null,
                 usedStockItems: effectiveJobData.usedStockItems || [],
                 price: effectiveJobData.price ?? 0,
+                // NEW FIELD INITIALIZATION: depositRequired
+                depositRequired: effectiveJobData.depositRequired ?? 0, // Populate if exists, else 0
                 formTemplate: effectiveJobData.formTemplate?._id || effectiveJobData.formTemplate || '',
             });
-            
+
             setFormError(null);
             setAvailabilityError(null);
             setSuccessMessage(null);
             fetchAvailableStock();
             fetchTaskLists();
         }
-    }, [isOpen, jobData, customers]);
+    }, [isOpen, jobData, customers]); // Added 'customers' to dependencies
 
     const fetchAvailableStock = async () => {
         try {
@@ -222,7 +221,7 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
         if (existingJobItemIndex !== -1) {
             const existingJobItem = formData.usedStockItems[existingJobItemIndex];
             const newQuantity = existingJobItem.quantityUsed + stockQuantityToAdd;
-            
+
             newUsedStockItems = formData.usedStockItems.map((item, index) =>
                 index === existingJobItemIndex
                     ? { ...item, quantityUsed: newQuantity }
@@ -263,15 +262,23 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
             return;
         }
 
-        if (!formData.customer || !formData.serviceType || !formData.date || !formData.time || !formData.duration || typeof formData.price !== 'number') {
-            setFormError('Please fill in all required fields: Customer, Service Type, Date, Time, Duration, and a valid Price.');
+        // Basic client-side validation for required fields
+        if (!formData.customer || !formData.serviceType || !formData.date || !formData.time || !formData.duration || typeof formData.price !== 'number' || formData.price < 0) {
+            setFormError('Please fill in all required fields: Customer, Service Type, Date, Time, Duration, and a valid non-negative Price.');
             setSaving(false);
             return;
         }
-        
-        const dataToSend = { ...formData, staff: formData.assignedStaff };
-        delete dataToSend.assignedStaff;
-        
+
+        // Client-side validation for depositRequired
+        if (formData.depositRequired > formData.price) {
+            setFormError('Deposit required cannot exceed the total job price.');
+            setSaving(false);
+            return;
+        }
+
+        const dataToSend = { ...formData, staff: formData.assignedStaff }; // Map assignedStaff to staff for backend
+        delete dataToSend.assignedStaff; // Remove assignedStaff from dataToSend
+
         try {
             let res;
             if (jobData?._id) {
@@ -286,7 +293,7 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
                 onSave(res.data.job);
             } else {
                 console.error("API response did not include job object. Triggering a full data refresh.");
-                onSave();
+                onSave(); // Trigger a full refresh if job object is not returned
             }
 
             setTimeout(() => onClose(), 1500);
@@ -313,6 +320,17 @@ const JobModal = ({ isOpen, onClose, onSave, jobData = null, customers = [], sta
                         <ModernInput label="Time" name="time" type="time" value={formData.time} onChange={handleChange} required />
                         <ModernInput label="Duration (minutes)" name="duration" type="number" value={formData.duration} onChange={handleChange} required min="5" step="5" />
                         <ModernInput label="Price" name="price" type="number" value={String(formData.price)} onChange={handleChange} required min="0" step="0.01" />
+                        {/* NEW FIELD: Deposit Required */}
+                        <ModernInput
+                            label="Deposit Required"
+                            name="depositRequired"
+                            type="number"
+                            value={String(formData.depositRequired)} // Ensure value is a string for input
+                            onChange={handleChange}
+                            min="0"
+                            step="0.01"
+                            helpText={`Set the upfront deposit amount. Cannot exceed job price (${formData.price || 0}).`}
+                        />
                     </div>
                     <ModernSelect label="Job Recurrence" name="pattern" value={formData.recurring.pattern} onChange={handleChange} options={recurrenceOptions} />
                     {formData.recurring.pattern !== 'none' && (

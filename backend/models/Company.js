@@ -1,5 +1,3 @@
-// Located at: ServiceOS/backend/models/Company.js
-
 const mongoose = require('mongoose');
 
 const companySchema = new mongoose.Schema({
@@ -14,6 +12,26 @@ const companySchema = new mongoose.Schema({
         trim: true,
         lowercase: true,
     },
+    
+    // --- STRIPE CONNECT FIELDS ---
+    stripeAccountId: {
+        type: String,
+        trim: true,
+        select: false,
+    },
+    stripeDetailsSubmitted: {
+        type: Boolean,
+        default: false,
+        select: false,
+    },
+    
+    // --- ADD THIS LOCKING FIELD ---
+    isConnectingStripe: {
+        type: Boolean,
+        default: false,
+    },
+    // -----------------------------
+
     settings: {
         logoUrl: { type: String, trim: true, default: '' },
         address: {

@@ -126,6 +126,7 @@
     "currencyPreferencesTab": "Currency Preferences",
     "myAccountTab": "My Account",
     "languageTab": "Language",
+    "paymentsTab": "Payments",
     "companyProfileSection": "Company Profile",
     "companyNameLabel": "Company Name",
     "companyLogoLabel": "Company Logo",
@@ -207,7 +208,28 @@
     "selectLanguageLabel": "Select Language",
     "languageChangeHelpText": "Choose your preferred language for the application.",
     "currentLanguageMessage": "Current language: {{lang}}",
-    "languagePreferencesSection": "Language Preferences"
+    "languagePreferencesSection": "Language Preferences",
+    "paymentsTab": "Payments",
+    "stripe": {
+        "title": "Stripe Connect Integration",
+        "connectTitle": "Connect your Stripe Account",
+        "connectDescription": "To accept payments directly into your own Stripe account, you need to connect it to ServiceOS. This allows customers to pay you directly through the platform.",
+        "connectButton": "Connect with Stripe",
+        "disconnectButton": "Disconnect Stripe",
+        "connectedStatus": "Connected!",
+        "connectedAccountId": "Connected Account ID: {{accountId}}",
+        "connectedOn": "Connected on: {{date}}",
+        "notConnectedStatus": "Not Connected",
+        "platformFeeNote": "Note: Payments processed through your connected Stripe account will be subject to Stripe's fees plus a small platform fee (e.g., 1%) from ServiceOS.",
+        "connectError": "Failed to connect to Stripe: {{errorMessage}}",
+        "connectSuccess": "Stripe account connected successfully!",
+        "disconnectSuccess": "Stripe account disconnected.",
+        "disconnectConfirm": "Are you sure you want to disconnect your Stripe account? You will no longer be able to receive payments through ServiceOS until reconnected.",
+        "completeOnboardingButton": "Complete Onboarding",
+        "actionRequiredTitle": "Action Required!",
+        "actionRequiredDescription": "Your Stripe account is connected, but you need to provide more information to Stripe to enable payouts. Click 'Complete Onboarding' to finish setting up your account.",
+        "dashboardButton": "Go to Stripe Dashboard"
+    }
   },
   "common": {
     "loading": "Loading...",
@@ -225,7 +247,8 @@
     "saving": "Saving...",
     "unassigned": "Unassigned",
     "notApplicableAddress": "N/A Address",
-    "notApplicableSource": "N/A Source"
+    "notApplicableSource": "N/A Source",
+    "redirecting": "Redirecting..."
   },
   "roles": {
     "admin": "Admin",

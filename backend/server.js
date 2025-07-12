@@ -4,7 +4,7 @@ const connectDB = require('./config/db');
 const cors = require('cors');
 const admin = require('firebase-admin');
 const path = require('path');
-const morgan = require('morgan'); // Added: Morgan for request logging
+const morgan = require('morgan');
 
 dotenv.config();
 
@@ -26,78 +26,50 @@ connectDB();
 const app = express();
 
 // Middleware
-// Using Morgan for concise request logging (replaces custom global request debug)
 app.use(morgan('dev'));
-
 app.use(cors({
-    origin: '*', // Adjust this for production to be more specific
+    origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-
-// Make the 'uploads' folder static
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Import Routes
-const authRoutes = require('./routes/authRoutes');
-const customerRoutes = require('./routes/customerRoutes');
-const leadRoutes = require('./routes/leadRoutes');
-const formRoutes = require('./routes/formRoutes');
-const publicRoutes = require('./routes/publicRoutes');
-const settingsRoutes = require('./routes/settingsRoutes');
-const uploadRoutes = require('./routes/uploadRoutes');
-const staffRoutes = require('./routes/staffRoutes');
-const jobRoutes = require('./routes/jobRoutes');
-const stockRoutes = require('./routes/stockRoutes');
-const emailTemplateRoutes = require('./routes/emailTemplateRoutes');
-const invoiceRoutes = require('./routes/invoiceRoutes');
-const dailyTimeRoutes = require('./routes/dailyTimeRoutes');
-const payrollRoutes = require('./routes/payrollRoutes');
-const customerPortalRoutes = require('./routes/customerPortalRoutes');
-const mailRoutes = require('./routes/mailRoutes');
-const routePlannerRoutes = require('./routes/routePlannerRoutes');
-const commissionReportRoutes = require('./routes/commissionReportRoutes');
-const dashboardRoutes = require('./routes/dashboardRoutes');
-const stripeRoutes = require('./routes/stripeRoutes'); // <--- ADDED THIS LINE
+// API Routes
+app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/customers', require('./routes/customerRoutes'));
+app.use('/api/leads', require('./routes/leadRoutes'));
+app.use('/api/forms', require('./routes/formRoutes'));
+app.use('/api/settings', require('./routes/settingsRoutes'));
+app.use('/api/uploads', require('./routes/uploadRoutes'));
+app.use('/api/staff', require('./routes/staffRoutes'));
+app.use('/api/jobs', require('./routes/jobRoutes'));
+app.use('/api/stock', require('./routes/stockRoutes'));
+app.use('/api/email-templates', require('./routes/emailTemplateRoutes'));
+app.use('/api/invoices', require('./routes/invoiceRoutes'));
+app.use('/api/daily-time', require('./routes/dailyTimeRoutes'));
+app.use('/api/payroll', require('./routes/payrollRoutes'));
+app.use('/api/public', require('./routes/publicRoutes'));
+app.use('/api/customer-portal', require('./routes/customerPortalRoutes'));
+app.use('/api/mail', require('./routes/mailRoutes'));
+app.use('/api/routes', require('./routes/routePlannerRoutes'));
+app.use('/api/reports', require('./routes/commissionReportRoutes'));
+app.use('/api/dashboard', require('./routes/dashboardRoutes'));
+app.use('/api/stripe', require('./routes/stripeRoutes'));
 
-// Use Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/customers', customerRoutes);
-app.use('/api/leads', leadRoutes);
-app.use('/api/forms', formRoutes);
-app.use('/api/settings', settingsRoutes);
-app.use('/api/uploads', uploadRoutes);
-app.use('/api/staff', staffRoutes);
-app.use('/api/jobs', jobRoutes);
-app.use('/api/stock', stockRoutes);
-app.use('/api/email-templates', emailTemplateRoutes);
-app.use('/api/invoices', invoiceRoutes);
-app.use('/api/daily-time', dailyTimeRoutes);
-app.use('/api/payroll', payrollRoutes);
-app.use('/api/public', publicRoutes);
-app.use('/api/customer-portal', customerPortalRoutes);
-app.use('/api/mail', mailRoutes);
-app.use('/api/routes', routePlannerRoutes);
-app.use('/api/reports', commissionReportRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/stripe', stripeRoutes); // <--- ADDED THIS LINE
-
-// Home route
+// Home route for API testing
 app.get('/', (req, res) => {
     res.send('API is running...');
 });
 
-// Handler for 404 Not Found (if no other route matches)
+// Error Handlers (These must come last)
 const notFound = (req, res, next) => {
     const error = new Error(`Not Found - ${req.originalUrl}`);
     res.status(404);
     next(error);
 };
 
-// Main Error Handler (catches all errors)
 const errorHandler = (err, req, res, next) => {
     const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
     res.status(statusCode);
@@ -107,7 +79,6 @@ const errorHandler = (err, req, res, next) => {
     });
 };
 
-// Use the error middleware AFTER all your API routes
 app.use(notFound);
 app.use(errorHandler);
 
